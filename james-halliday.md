@@ -30,3 +30,14 @@ and check whether the two agents under @./claude/agents are using @PROJECT_PROGR
 7. Replan. I don't want to reduce functionality.
 
 8. I'm not sure you can do these things in parallel and achieve them step by step within 9 days.
+
+9. Do you need to update @./claude/agents
+
+> 一个AI Agent还煞有介事的给我安排了一个38天的计划！
+> An AI Agent even seriously arranged a 38 - day plan for me!
+
+10. add an .gitignore file, and rm @.claude/settings.local.json from
+   repository
+
+
+11. Let's start the development tasks for the first day.
