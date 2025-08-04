@@ -54,20 +54,18 @@ export class PreloadScene extends Scene {
   }
 
   private loadAssets(): void {
-    // Load placeholder sprites
-    const sprites = AssetManager.createPlaceholderSprites();
+    // Load IBM-style assets using AssetManager
+    AssetManager.loadIBMAssets(this);
     
-    Object.entries(sprites).forEach(([key, dataUrl]) => {
-      this.load.image(key, dataUrl);
-    });
-    
-    // Simulate loading time for development
-    for (let i = 0; i < 5; i++) {
-      this.load.image(`dummy-${i}`, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-    }
+    // Load level data
+    this.load.json('classic-levels', 'assets/levels/classic.json');
   }
 
   private onLoadComplete(): void {
+    // Create animations after assets are loaded
+    AssetManager.createPlayerAnimations(this);
+    AssetManager.createEnemyAnimations(this);
+    
     this.time.delayedCall(500, () => {
       this.scene.start(SCENE_KEYS.MENU);
     });

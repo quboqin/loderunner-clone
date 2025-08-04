@@ -20,19 +20,25 @@ export class MenuScene extends Scene {
   private createTitle(): void {
     const centerX = this.cameras.main.width / 2;
     
-    this.add.text(centerX, 150, 'LODE RUNNER', {
-      fontSize: '64px',
-      color: '#ffff00',
-      fontFamily: 'Arial, sans-serif',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5);
+    // Use authentic IBM logo if available, fallback to text
+    if (this.textures.exists('logo')) {
+      const logo = this.add.image(centerX, 180, 'logo');
+      logo.setScale(2); // Scale up the logo
+    } else {
+      this.add.text(centerX, 150, 'LODE RUNNER', {
+        fontSize: '64px',
+        color: '#ffff00',
+        fontFamily: 'Arial, sans-serif',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
 
-    this.add.text(centerX, 220, 'CLONE', {
-      fontSize: '32px',
-      color: '#ffffff',
-      fontFamily: 'Arial, sans-serif'
-    }).setOrigin(0.5);
+      this.add.text(centerX, 220, 'CLONE', {
+        fontSize: '32px',
+        color: '#ffffff',
+        fontFamily: 'Arial, sans-serif'
+      }).setOrigin(0.5);
+    }
   }
 
   private createMenu(): void {

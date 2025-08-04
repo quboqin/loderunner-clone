@@ -11,73 +11,95 @@ export class AssetManager {
     return AssetManager.instance;
   }
 
-  // Create placeholder sprites as colored rectangles for development
-  static createPlaceholderSprites(): { [key: string]: string } {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    canvas.width = 32;
-    canvas.height = 32;
+  // Load IBM-style sprite atlases with JSON frame data
+  static loadIBMAssets(scene: Phaser.Scene): void {
+    // Load sprite atlases with JSON frame configurations
+    scene.load.atlas('runner', 'assets/sprites/runner.png', 'assets/sprites/runner.json');
+    scene.load.atlas('guard', 'assets/sprites/guard.png', 'assets/sprites/guard.json');
+    scene.load.atlas('tiles', 'assets/sprites/tiles.png', 'assets/sprites/tiles.json');
+    scene.load.atlas('hole', 'assets/sprites/hole.png', 'assets/sprites/hole.json');
 
-    const sprites: { [key: string]: string } = {};
+    // Load UI images
+    scene.load.image('logo', 'assets/images/logo.png');
+    scene.load.image('game-over', 'assets/images/game-over.png');
+    scene.load.image('start-screen', 'assets/images/start-screen.png');
 
-    // Player sprite (red)
-    ctx.fillStyle = '#FF6B6B';
-    ctx.fillRect(4, 2, 24, 30);
-    sprites.player = canvas.toDataURL();
+    // Load audio files
+    scene.load.audio('dig', 'assets/audio/dig.wav');
+    scene.load.audio('getGold', 'assets/audio/getGold.wav');
+    scene.load.audio('dead', 'assets/audio/dead.wav');
+    scene.load.audio('pass', 'assets/audio/pass.wav');
+    scene.load.audio('fall', 'assets/audio/fall.wav');
+    
+    // Load level completion music
+    scene.load.audio('goldFinish1', 'assets/audio/goldFinish1.mp3');
+    scene.load.audio('goldFinish2', 'assets/audio/goldFinish2.mp3');
+    scene.load.audio('goldFinish3', 'assets/audio/goldFinish3.mp3');
+  }
 
-    // Clear canvas
-    ctx.clearRect(0, 0, 32, 32);
+  // Create player animations from IBM runner atlas
+  static createPlayerAnimations(scene: Phaser.Scene): void {
+    // Running right animation (frames 0-8)
+    scene.anims.create({
+      key: 'player-run-right',
+      frames: scene.anims.generateFrameNames('runner', {
+        prefix: 'runner_',
+        start: 0,
+        end: 8,
+        zeroPad: 2
+      }),
+      frameRate: 12,
+      repeat: -1
+    });
 
-    // Brick tile (brown)
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(0, 0, 32, 32);
-    ctx.strokeStyle = '#654321';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, 32, 32);
-    sprites.brick = canvas.toDataURL();
+    // Running left animation (frames 9-17)
+    scene.anims.create({
+      key: 'player-run-left',
+      frames: scene.anims.generateFrameNames('runner', {
+        prefix: 'runner_',
+        start: 9,
+        end: 17,
+        zeroPad: 2
+      }),
+      frameRate: 12,
+      repeat: -1
+    });
 
-    ctx.clearRect(0, 0, 32, 32);
+    // Idle animation (frame 0)
+    scene.anims.create({
+      key: 'player-idle',
+      frames: [{ key: 'runner', frame: 'runner_00' }],
+      frameRate: 1
+    });
 
-    // Solid tile (dark gray)
-    ctx.fillStyle = '#444444';
-    ctx.fillRect(0, 0, 32, 32);
-    sprites.solid = canvas.toDataURL();
+    // Climbing animation (frames 1-3)
+    scene.anims.create({
+      key: 'player-climb',
+      frames: scene.anims.generateFrameNames('runner', {
+        prefix: 'runner_',
+        start: 1,
+        end: 3,
+        zeroPad: 2
+      }),
+      frameRate: 8,
+      repeat: -1
+    });
+  }
 
-    ctx.clearRect(0, 0, 32, 32);
-
-    // Ladder (yellow)
-    ctx.fillStyle = '#FFFF00';
-    ctx.fillRect(8, 0, 4, 32);
-    ctx.fillRect(20, 0, 4, 32);
-    for (let i = 0; i < 32; i += 6) {
-      ctx.fillRect(6, i, 20, 2);
-    }
-    sprites.ladder = canvas.toDataURL();
-
-    ctx.clearRect(0, 0, 32, 32);
-
-    // Rope (brown)
-    ctx.fillStyle = '#8B4513';
-    ctx.fillRect(14, 0, 4, 32);
-    sprites.rope = canvas.toDataURL();
-
-    ctx.clearRect(0, 0, 32, 32);
-
-    // Gold (yellow circle)
-    ctx.fillStyle = '#FFD700';
-    ctx.beginPath();
-    ctx.arc(16, 16, 10, 0, Math.PI * 2);
-    ctx.fill();
-    sprites.gold = canvas.toDataURL();
-
-    ctx.clearRect(0, 0, 32, 32);
-
-    // Enemy (purple)
-    ctx.fillStyle = '#9B59B6';
-    ctx.fillRect(4, 2, 24, 30);
-    sprites.enemy = canvas.toDataURL();
-
-    return sprites;
+  // Create enemy animations from IBM guard atlas
+  static createEnemyAnimations(scene: Phaser.Scene): void {
+    // Guard walking animation
+    scene.anims.create({
+      key: 'guard-walk',
+      frames: scene.anims.generateFrameNames('guard', {
+        prefix: 'guard_',
+        start: 0,
+        end: 7,
+        zeroPad: 2
+      }),
+      frameRate: 8,
+      repeat: -1
+    });
   }
 
   // Asset loading utilities for future integration with Roku repository
@@ -127,24 +149,58 @@ export class AssetManager {
     return this.loadedAssets.has(key);
   }
 
-  // Level data parsing for future integration
-  parseLevelData(levelString: string): number[][] {
-    const lines = levelString.trim().split('\n');
-    return lines.map(line => {
-      return line.split('').map(char => {
+  // Parse classic.json level data format
+  static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, enemies: {x: number, y: number}[], gold: {x: number, y: number}[] } {
+    const tiles: number[][] = [];
+    const enemies: {x: number, y: number}[] = [];
+    const gold: {x: number, y: number}[] = [];
+    let playerStart = { x: 0, y: 0 };
+
+    levelArray.forEach((line, y) => {
+      const row: number[] = [];
+      for (let x = 0; x < line.length; x++) {
+        const char = line[x];
         switch (char) {
-          case ' ': return 0; // Empty
-          case '#': return 1; // Brick
-          case 'S': return 2; // Solid
-          case 'H': return 3; // Ladder
-          case '-': return 4; // Rope
-          case 'G': return 5; // Gold
-          case 'P': return 6; // Player start
-          case 'E': return 7; // Enemy start
-          default: return 0;
+          case ' ': row.push(0); break; // Empty
+          case '#': row.push(1); break; // Brick
+          case 'S': row.push(2); break; // Solid
+          case 'H': row.push(3); break; // Ladder
+          case '-': row.push(4); break; // Rope
+          case '$': 
+            row.push(0); // Empty space with gold
+            gold.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+            break;
+          case '&': 
+            row.push(0); // Empty space
+            playerStart = { x: x * 32, y: y * 32 }; // Convert to pixel coordinates
+            break;
+          case '0': 
+            row.push(0); // Empty space with enemy
+            enemies.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+            break;
+          case '@': row.push(5); break; // Special brick (can be dug)
+          case 'X': row.push(6); break; // Exit
+          default: row.push(0); // Default to empty
         }
-      });
+      }
+      tiles.push(row);
     });
+
+    return { tiles, playerStart, enemies, gold };
+  }
+
+  // Get tile sprite frame name from tile type
+  static getTileFrame(tileType: number): string {
+    switch (tileType) {
+      case 0: return 'empty';
+      case 1: return 'brick';
+      case 2: return 'solid';
+      case 3: return 'ladder';
+      case 4: return 'rope';
+      case 5: return 'brick'; // Special brick
+      case 6: return 'trap'; // Exit/trap
+      default: return 'empty';
+    }
   }
 
   // Asset optimization utilities
