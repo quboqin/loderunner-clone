@@ -24,3 +24,9 @@ Deploy this game to Vercel
 
 5. Based on the two agents under @./claude/agents, check for duplicate content in @PM_AGENT_OPERATION_GUIDE.md, @PROJECT_MANAGER_AGENT_SPEC.md, and @UI_ANIMATION_QUALITY_STANDARDS.md, and delete such duplicate content or files.
 and check whether the two agents under @./claude/agents are using @PROJECT_PROGRESS.md reasonably
+
+6. Because I have utilized the capabilities of AI, I want to optimize the R & D progress within one week. 
+
+7. Replan. I don't want to reduce functionality.
+
+8. I'm not sure you can do these things in parallel and achieve them step by step within 9 days.
