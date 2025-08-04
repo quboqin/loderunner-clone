@@ -61,6 +61,12 @@ When integrating assets from the reference repository:
 - Implement efficient asset loading strategies
 - Consider audio format compatibility across browsers
 
+## Project Management
+
+- **Progress Tracking**: Use `PROJECT_PROGRESS.md` for development phase tracking and task management
+- **Sub-Agents**: Project Manager Agent and UX/Animation Specialist available in `.claude/agents/`
+- **Development Phases**: 9-phase structure from foundation through Vercel deployment
+
 ## Deployment Notes
 
 - Deploy this game onto Vercel
