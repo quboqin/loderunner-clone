@@ -40,7 +40,7 @@ npm test
 - Game engine initialization and configuration
 - Level loading and rendering system
 - Player character movement and physics
-- Enemy AI and behavior patterns
+- Guard AI and behavior patterns
 - Gold collection and scoring system
 - Hole digging mechanics
 - Sound and music integration

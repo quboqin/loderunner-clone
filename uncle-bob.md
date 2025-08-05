@@ -78,3 +78,6 @@ I found that you are stuck in the Vercel deployment issue. The current solution 
   1. ![alt text](<Screenshot 2025-08-05 at 12.11.35 PM.png>) pressed `space`, but it does not return to the main menu, figout the issue, don't commit and don't push
   2. When I enter into a new game, and press `ESC`, it also can not return to the main menu...... still doesn't work
   ![alt text](<Screenshot 2025-08-05 at 12.27.59 PM.png>)
+  3. The number of animation frames hard-coded in AssetManager.ts is incorrect, and it's also inappropriate to hard-code them in the code. Please refer to the implementation of defining animations in JSON format in assets/anims/ in /Users/qinqubo/magic/refs/Lode - Runner - Roku.
+    1. No need for fallback animations
+    2. In /Users/qinqubo/magic/refs/Lode-Runner-Roku  The enemy sprites is called `Guard`, replace all `enemy` with `guard`

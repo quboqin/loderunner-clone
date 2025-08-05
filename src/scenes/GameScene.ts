@@ -73,12 +73,12 @@ export class GameScene extends Scene {
       this.gameState.totalGold++;
     });
     
-    // Create enemy starting positions (for later implementation)
-    levelInfo.enemies.forEach((enemyPos: { x: number; y: number }) => {
-      // Placeholder for enemy spawning
-      const enemy = this.add.sprite(enemyPos.x + 16, enemyPos.y + 16, 'guard', 'guard_00');
-      enemy.setScale(1.6);
-      enemy.setData('type', 'enemy');
+    // Create guard starting positions (for later implementation)
+    levelInfo.guards.forEach((guardPos: { x: number; y: number }) => {
+      // Placeholder for guard spawning
+      const guard = this.add.sprite(guardPos.x + 16, guardPos.y + 16, 'guard', 'guard_00');
+      guard.setScale(1.6);
+      guard.setData('type', 'guard');
     });
   }
 

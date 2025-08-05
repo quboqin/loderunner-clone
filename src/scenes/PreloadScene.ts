@@ -64,7 +64,8 @@ export class PreloadScene extends Scene {
   private onLoadComplete(): void {
     // Create animations after assets are loaded
     AssetManager.createPlayerAnimations(this);
-    AssetManager.createEnemyAnimations(this);
+    AssetManager.createGuardAnimations(this);
+    AssetManager.createHoleAnimations(this);
     
     this.time.delayedCall(500, () => {
       this.scene.start(SCENE_KEYS.MENU);

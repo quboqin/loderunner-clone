@@ -20,7 +20,7 @@ export const SCENE_KEYS = {
 export const ASSET_KEYS = {
   SPRITES: {
     PLAYER: 'player-sprite',
-    ENEMY: 'enemy-sprite',
+    GUARD: 'guard-sprite',
     TILES: 'tiles-sprite',
     GOLD: 'gold-sprite'
   },

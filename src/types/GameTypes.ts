@@ -35,5 +35,5 @@ export enum TileType {
   ROPE = 4,
   GOLD = 5,
   PLAYER_START = 6,
-  ENEMY_START = 7
+  GUARD_START = 7
 }

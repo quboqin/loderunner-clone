@@ -103,21 +103,21 @@
 
 ---
 
-### Day 7: Enemy AI - **Not Started**
-**Objective**: Add challenging enemy characters
+### Day 7: Guard AI - **Not Started**
+**Objective**: Add challenging guard characters
 
 **Tasks & Progress**:
-- [ ] Create enemy sprite animation system
-- [ ] Implement basic enemy movement AI
+- [ ] Create guard sprite animation system
+- [ ] Implement basic guard movement AI
 - [ ] Add simple pathfinding for navigation
-- [ ] Create enemy state management
-- [ ] Implement enemy-player collision detection
-- [ ] Add enemy spawning system
+- [ ] Create guard state management
+- [ ] Implement guard-player collision detection
+- [ ] Add guard spawning system
 
 **Success Criteria**:
 - Enemies move intelligently through levels
 - AI behavior provides appropriate challenge
-- Enemy animations are smooth
+- Guard animations are smooth
 - Collision detection is precise and fair
 
 ---
@@ -172,7 +172,7 @@
 - [ ] Day 3-4: World Building Complete
 - [ ] Day 5: Player Character Complete
 - [ ] Day 6: Core Gameplay Complete
-- [ ] Day 7: Enemy AI Complete
+- [ ] Day 7: Guard AI Complete
 - [ ] Day 8: Integration & Polish Complete
 - [ ] Day 9: Deployment & Launch Complete
 
@@ -211,11 +211,11 @@
 - [ ] Complete world building system (Days 3-4)
 - [ ] Implement player character (Day 5)
 - [ ] Add core gameplay mechanics (Day 6)
-- [ ] Integrate enemy AI (Day 7)
+- [ ] Integrate guard AI (Day 7)
 - [ ] Polish and deploy to Vercel (Days 8-9)
 
 ### Post-MVP (Future Enhancement)
-- [ ] Advanced enemy pathfinding
+- [ ] Advanced guard pathfinding
 - [ ] Multiple level progression
 - [ ] Enhanced audio and visual effects
 - [ ] Advanced UI polish and responsive design

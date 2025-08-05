@@ -35,71 +35,116 @@ export class AssetManager {
     scene.load.audio('goldFinish1', 'assets/audio/goldFinish1.mp3');
     scene.load.audio('goldFinish2', 'assets/audio/goldFinish2.mp3');
     scene.load.audio('goldFinish3', 'assets/audio/goldFinish3.mp3');
+
+    // Load animation definition files
+    scene.load.json('runner-anims', 'assets/anims/runner.json');
+    scene.load.json('guard-anims', 'assets/anims/guard.json');
+    scene.load.json('hole-anims', 'assets/anims/hole.json');
   }
 
-  // Create player animations from IBM runner atlas
+  // Create player animations from IBM runner atlas using JSON definitions
   static createPlayerAnimations(scene: Phaser.Scene): void {
-    // Running right animation (frames 0-8)
-    scene.anims.create({
-      key: 'player-run-right',
-      frames: scene.anims.generateFrameNames('runner', {
-        prefix: 'runner_',
-        start: 0,
-        end: 8,
-        zeroPad: 2
-      }),
-      frameRate: 12,
-      repeat: -1
-    });
+    const animData = scene.cache.json.get('runner-anims');
+    const sequences = animData.sequence;
 
-    // Running left animation (frames 9-17)
-    scene.anims.create({
-      key: 'player-run-left',
-      frames: scene.anims.generateFrameNames('runner', {
-        prefix: 'runner_',
-        start: 9,
-        end: 17,
-        zeroPad: 2
-      }),
-      frameRate: 12,
-      repeat: -1
-    });
+    // Helper function to create animation from frame sequence
+    const createAnimation = (key: string, sequenceKey: string, frameRate: number = 12, repeat: number = -1) => {
+      const frames = sequences[sequenceKey].map((frameIndex: number) => ({
+        key: 'runner',
+        frame: `runner_${frameIndex.toString().padStart(2, '0')}`
+      }));
 
-    // Idle animation (frame 0)
+      scene.anims.create({
+        key,
+        frames,
+        frameRate,
+        repeat
+      });
+    };
+
+    // Create all runner animations from JSON
+    createAnimation('player-run-right', 'runRight', 12, -1);
+    createAnimation('player-run-left', 'runLeft', 12, -1);
+    createAnimation('player-climb', 'runUpDown', 8, -1);
+    createAnimation('player-bar-right', 'barRight', 8, -1);
+    createAnimation('player-bar-left', 'barLeft', 8, -1);
+    createAnimation('player-dig-right', 'digRight', 1, 0);
+    createAnimation('player-dig-left', 'digLeft', 1, 0);
+    createAnimation('player-fall-right', 'fallRight', 1, 0);
+    createAnimation('player-fall-left', 'fallLeft', 1, 0);
+
+    // Idle animation (use first frame of runRight)
     scene.anims.create({
       key: 'player-idle',
       frames: [{ key: 'runner', frame: 'runner_00' }],
       frameRate: 1
     });
+  }
 
-    // Climbing animation (frames 1-3)
+  // Create guard animations from IBM guard atlas using JSON definitions
+  static createGuardAnimations(scene: Phaser.Scene): void {
+    const animData = scene.cache.json.get('guard-anims');
+    const sequences = animData.sequence;
+
+    // Helper function to create animation from frame sequence
+    const createAnimation = (key: string, sequenceKey: string, frameRate: number = 8, repeat: number = -1) => {
+      const frames = sequences[sequenceKey].map((frameIndex: number) => ({
+        key: 'guard',
+        frame: `guard_${frameIndex.toString().padStart(2, '0')}`
+      }));
+
+      scene.anims.create({
+        key,
+        frames,
+        frameRate,
+        repeat
+      });
+    };
+
+    // Create all guard animations from JSON
+    createAnimation('guard-run-right', 'runRight', 8, -1);
+    createAnimation('guard-run-left', 'runLeft', 8, -1);
+    createAnimation('guard-climb', 'runUpDown', 6, -1);
+    createAnimation('guard-bar-right', 'barRight', 6, -1);
+    createAnimation('guard-bar-left', 'barLeft', 6, -1);
+    createAnimation('guard-reborn', 'reborn', 4, 0);
+    createAnimation('guard-fall-right', 'fallRight', 1, 0);
+    createAnimation('guard-fall-left', 'fallLeft', 1, 0);
+    createAnimation('guard-shake-right', 'shakeRight', 10, 0);
+    createAnimation('guard-shake-left', 'shakeLeft', 10, 0);
+
+    // Guard idle animation (use first frame of runRight)
     scene.anims.create({
-      key: 'player-climb',
-      frames: scene.anims.generateFrameNames('runner', {
-        prefix: 'runner_',
-        start: 1,
-        end: 3,
-        zeroPad: 2
-      }),
-      frameRate: 8,
-      repeat: -1
+      key: 'guard-idle',
+      frames: [{ key: 'guard', frame: 'guard_00' }],
+      frameRate: 1
     });
   }
 
-  // Create enemy animations from IBM guard atlas
-  static createEnemyAnimations(scene: Phaser.Scene): void {
-    // Guard walking animation
-    scene.anims.create({
-      key: 'guard-walk',
-      frames: scene.anims.generateFrameNames('guard', {
-        prefix: 'guard_',
-        start: 0,
-        end: 7,
-        zeroPad: 2
-      }),
-      frameRate: 8,
-      repeat: -1
-    });
+  // Create hole animations from IBM hole atlas using JSON definitions
+  static createHoleAnimations(scene: Phaser.Scene): void {
+    const animData = scene.cache.json.get('hole-anims');
+    const sequences = animData.sequence;
+
+    // Helper function to create animation from frame sequence
+    const createAnimation = (key: string, sequenceKey: string, frameRate: number = 8, repeat: number = 0) => {
+      const frames = sequences[sequenceKey].map((frameIndex: number) => ({
+        key: 'hole',
+        frame: `hole_${frameIndex.toString().padStart(2, '0')}`
+      }));
+
+      scene.anims.create({
+        key,
+        frames,
+        frameRate,
+        repeat
+      });
+    };
+
+    // Create all hole animations from JSON
+    createAnimation('hole-dig-left', 'digHoleLeft', 10, 0);
+    createAnimation('hole-dig-right', 'digHoleRight', 10, 0);
+    createAnimation('hole-fill', 'fillHole', 4, 0);
   }
 
   // Asset loading utilities for future integration with Roku repository
@@ -150,9 +195,9 @@ export class AssetManager {
   }
 
   // Parse classic.json level data format
-  static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, enemies: {x: number, y: number}[], gold: {x: number, y: number}[] } {
+  static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, guards: {x: number, y: number}[], gold: {x: number, y: number}[] } {
     const tiles: number[][] = [];
-    const enemies: {x: number, y: number}[] = [];
+    const guards: {x: number, y: number}[] = [];
     const gold: {x: number, y: number}[] = [];
     let playerStart = { x: 0, y: 0 };
 
@@ -175,8 +220,8 @@ export class AssetManager {
             playerStart = { x: x * 32, y: y * 32 }; // Convert to pixel coordinates
             break;
           case '0': 
-            row.push(0); // Empty space with enemy
-            enemies.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+            row.push(0); // Empty space with guard
+            guards.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
             break;
           case '@': row.push(5); break; // Special brick (can be dug)
           case 'X': row.push(6); break; // Exit
@@ -186,7 +231,7 @@ export class AssetManager {
       tiles.push(row);
     });
 
-    return { tiles, playerStart, enemies, gold };
+    return { tiles, playerStart, guards, gold };
   }
 
   // Get tile sprite frame name from tile type

@@ -57,7 +57,7 @@ Execute the accelerated daily milestone structure as defined in `PROJECT_PROGRES
 - **Day 3-4**: World Building (level system, rendering, collision)
 - **Day 5**: Player Character (animations, physics, controls)
 - **Day 6**: Core Gameplay (hole digging, gold collection, scoring)
-- **Day 7**: Enemy AI (basic AI, collision, spawning)
+- **Day 7**: Guard AI (basic AI, collision, spawning)
 - **Day 8**: Integration & Polish (UI, audio, bug fixes)
 - **Day 9**: Deployment & Launch (production build, Vercel deployment)
 

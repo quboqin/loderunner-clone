@@ -113,7 +113,7 @@ Align with 9-day sprint structure in `PROJECT_PROGRESS.md`:
 - **Day 3-4**: Level rendering quality and visual hierarchy validation
 - **Day 5**: Character animation standards and responsiveness testing
 - **Day 6**: Gameplay feedback systems and visual clarity validation
-- **Day 7**: Enemy animation quality and interaction feedback review
+- **Day 7**: Guard animation quality and interaction feedback review
 - **Day 8**: UI implementation, basic audio integration, and mobile responsiveness
 - **Day 9**: Final UX validation and deployment visual verification
 
@@ -146,7 +146,7 @@ Align with 9-day sprint structure in `PROJECT_PROGRESS.md`:
 - **Day 3-4**: Validate level rendering quality, establish visual hierarchy standards
 - **Day 5**: Ensure character animation smoothness and responsive controls
 - **Day 6**: Review gameplay visual feedback and interaction clarity
-- **Day 7**: Validate enemy animation quality and AI visual communication
+- **Day 7**: Validate guard animation quality and AI visual communication
 - **Day 8**: Implement essential UI elements and basic audio-visual integration
 - **Day 9**: Conduct final UX validation and deployment visual verification
 
