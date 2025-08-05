@@ -51,22 +51,22 @@ API Error: 500 {"type":"error","error":{"type":"api_error","me
 try again
 
 13. Submit a version of the code first, but don't push it. Wait for my subsequent instructions. The tasks of Day 1 are not completed. I need to check. 
-![alt text](<Screenshot 2025-08-04 at 8.12.32 PM.png>)
+![alt text](<screenshots/Screenshot 2025-08-04 at 8.12.32 PM.png>)
 
 14. /add-dir /Users/qinqubo/magic/refs/Lode-Runner-Roku     
 Replace the resources of the current project with the assets in /Users/qinqubo/magic/refs/Lode-Runner-Roku. Use the resources in IBM
-![alt text](<Screenshot 2025-08-04 at 8.43.13 PM.png>)
+![alt text](<screenshots/Screenshot 2025-08-04 at 8.43.13 PM.png>)
 commit this replace, but the Day 1 tasks are still not finished, let me verify 
 
-15. @Screenshot 2025-08-04 at 8.43.13 PM.png and @james-halliday.md are not be 
+15. @screenshots/Screenshot 2025-08-04 at 8.43.13 PM.png and @james-halliday.md are not be 
   committed
 16. You've misunderstood. I meant for you to withdraw the previous submission and also submit the modifications to these two files.
 
 17. When I deployed this project on Vercel, I wanted to start a new game, but when I pressed `enter`, it was no response. but when I run on my local host, it is ok
 
-18. According to the console logs, I've seen these errors, so the previous solution was incorrect. Is it possible to roll back, re - locate the problem as shown in the screenshot, but don't commit or push for now.![alt text](<Screenshot 2025-08-05 at 9.28.44 AM.png>)
+18. According to the console logs, I've seen these errors, so the previous solution was incorrect. Is it possible to roll back, re - locate the problem as shown in the screenshot, but don't commit or push for now.![alt text](<screenshots/Screenshot 2025-08-05 at 9.28.44 AM.png>)
 
-19. It's still incorrect. This time the error is![alt text](<Screenshot 2025-08-05 at 9.41.03 AM.png>)
+19. It's still incorrect. This time the error is![alt text](<screenshots/Screenshot 2025-08-05 at 9.41.03 AM.png>)
 
 20. 从17-19， 我发现你陷在Vercel的部署问题里了，目前的解决搞错了方向， 请先回滚到1d3f6c2这次提交. 我先check其他问题 
 
@@ -75,9 +75,9 @@ I found that you are stuck in the Vercel deployment issue. The current solution 
 > @james-halliday.md cannot be used as a file name. This name has been preemptively registered by a little bear. Change the file name to @uncle-bob.md
 
 21. Bug fix
-  1. ![alt text](<Screenshot 2025-08-05 at 12.11.35 PM.png>) pressed `space`, but it does not return to the main menu, figout the issue, don't commit and don't push
+  1. ![alt text](<screenshots/Screenshot 2025-08-05 at 12.11.35 PM.png>) pressed `space`, but it does not return to the main menu, figout the issue, don't commit and don't push
   2. When I enter into a new game, and press `ESC`, it also can not return to the main menu...... still doesn't work
-  ![alt text](<Screenshot 2025-08-05 at 12.27.59 PM.png>)
+  ![alt text](<screenshots/Screenshot 2025-08-05 at 12.27.59 PM.png>)
   3. The number of animation frames hard-coded in AssetManager.ts is incorrect, and it's also inappropriate to hard-code them in the code. Please refer to the implementation of defining animations in JSON format in assets/anims/ in /Users/qinqubo/magic/refs/Lode - Runner - Roku.
     1. No need for fallback animations
     2. In /Users/qinqubo/magic/refs/Lode-Runner-Roku  The enemy sprites is called `Guard`, replace all `enemy` with `guard`
@@ -93,3 +93,11 @@ commit and push this branch, I plan to test whether the deployment on Vercel is 
 I want to trigger Vercel to deploy this branch. What configurations do I need to make? Please give me detailed instructions. Only one method is required, and it is better to support the command line.
 
 **Deployment Guide**: See [vercel-deployment-guide.md](./vercel-deployment-guide.md) for complete CLI deployment instructions.
+
+23. commit, and merge this branch into main, then switch to main branch
+
+24. As a project manager, check the status of this project, and update progress of this project
+I think we've only completed most of the work for Day 1 - 2 and Day 3 - 4. The 'Build level geometry collision system' hasn't started yet, and many subsequent tasks can't be considered completed either. As a senior PM 🐻, please think hard and carefully update the project progress.
+Day 8 and Day 9 are also not completed yet
+
+25. create a folder named screenshots, and move all screenshot files(file names starting with Screenshot 2025-08-) into this folder, and update all links in uncle-bob.md file
