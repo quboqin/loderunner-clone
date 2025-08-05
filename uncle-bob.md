@@ -89,3 +89,7 @@ according to the specifications in https://docs.anthropic.com/en/docs/claude-cod
 The project of Phaser built by Vite runs normally locally. However, when deployed to Vercel, the resources cannot be read. May I ask what issues are mainly causing this? Check the entire project and, from the perspective of a vercel-deployment-specialist, see where modifications are needed. 
 
 commit and push this branch, I plan to test whether the deployment on Vercel is successful by myself
+
+I want to trigger Vercel to deploy this branch. What configurations do I need to make? Please give me detailed instructions. Only one method is required, and it is better to support the command line.
+
+**Deployment Guide**: See [vercel-deployment-guide.md](./vercel-deployment-guide.md) for complete CLI deployment instructions.
