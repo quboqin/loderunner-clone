@@ -39,6 +39,7 @@ and check whether the two agents under @./claude/agents are using @PROJECT_PROGR
 10. add an .gitignore file, and rm @.claude/settings.local.json from
    repository
 
+## Day 1
 
 11. Let's start the development tasks for the first day.
 
@@ -60,3 +61,15 @@ commit this replace, but the Day 1 tasks are still not finished, let me verify
 15. @Screenshot 2025-08-04 at 8.43.13 PM.png and @james-halliday.md are not be 
   committed
 16. You've misunderstood. I meant for you to withdraw the previous submission and also submit the modifications to these two files.
+
+17. When I deployed this project on Vercel, I wanted to start a new game, but when I pressed `enter`, it was no response. but when I run on my local host, it is ok
+
+18. According to the console logs, I've seen these errors, so the previous solution was incorrect. Is it possible to roll back, re - locate the problem as shown in the screenshot, but don't commit or push for now.![alt text](<Screenshot 2025-08-05 at 9.28.44 AM.png>)
+
+19. It's still incorrect. This time the error is![alt text](<Screenshot 2025-08-05 at 9.41.03 AM.png>)
+
+20. 从17-19， 我发现你陷在Vercel的部署问题里了，目前的解决搞错了方向， 请先回滚到1d3f6c2这次提交. 我先check替他问题 
+
+I found that you are stuck in the Vercel deployment issue. The current solution is going in the wrong direction. Please roll back to the commit 1d3f6c2 first. I'll first check for other problems
+
+> @james-halliday.md cannot be used as a file name. This name has been preemptively registered by a little bear. Change the file name to @uncle-bob.md
