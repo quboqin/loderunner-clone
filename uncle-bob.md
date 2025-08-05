@@ -81,3 +81,11 @@ I found that you are stuck in the Vercel deployment issue. The current solution 
   3. The number of animation frames hard-coded in AssetManager.ts is incorrect, and it's also inappropriate to hard-code them in the code. Please refer to the implementation of defining animations in JSON format in assets/anims/ in /Users/qinqubo/magic/refs/Lode - Runner - Roku.
     1. No need for fallback animations
     2. In /Users/qinqubo/magic/refs/Lode-Runner-Roku  The enemy sprites is called `Guard`, replace all `enemy` with `guard`
+
+22. Vercel Deploy
+create a new branch for vercel deployment
+according to the specifications in https://docs.anthropic.com/en/docs/claude-code/overview add a new sub-agent for deploying on Vercel
+
+The project of Phaser built by Vite runs normally locally. However, when deployed to Vercel, the resources cannot be read. May I ask what issues are mainly causing this? Check the entire project and, from the perspective of a vercel-deployment-specialist, see where modifications are needed. 
+
+commit and push this branch, I plan to test whether the deployment on Vercel is successful by myself

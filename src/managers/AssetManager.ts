@@ -14,32 +14,32 @@ export class AssetManager {
   // Load IBM-style sprite atlases with JSON frame data
   static loadIBMAssets(scene: Phaser.Scene): void {
     // Load sprite atlases with JSON frame configurations
-    scene.load.atlas('runner', 'assets/sprites/runner.png', 'assets/sprites/runner.json');
-    scene.load.atlas('guard', 'assets/sprites/guard.png', 'assets/sprites/guard.json');
-    scene.load.atlas('tiles', 'assets/sprites/tiles.png', 'assets/sprites/tiles.json');
-    scene.load.atlas('hole', 'assets/sprites/hole.png', 'assets/sprites/hole.json');
+    scene.load.atlas('runner', './assets/sprites/runner.png', './assets/sprites/runner.json');
+    scene.load.atlas('guard', './assets/sprites/guard.png', './assets/sprites/guard.json');
+    scene.load.atlas('tiles', './assets/sprites/tiles.png', './assets/sprites/tiles.json');
+    scene.load.atlas('hole', './assets/sprites/hole.png', './assets/sprites/hole.json');
 
     // Load UI images
-    scene.load.image('logo', 'assets/images/logo.png');
-    scene.load.image('game-over', 'assets/images/game-over.png');
-    scene.load.image('start-screen', 'assets/images/start-screen.png');
+    scene.load.image('logo', './assets/images/logo.png');
+    scene.load.image('game-over', './assets/images/game-over.png');
+    scene.load.image('start-screen', './assets/images/start-screen.png');
 
     // Load audio files
-    scene.load.audio('dig', 'assets/audio/dig.wav');
-    scene.load.audio('getGold', 'assets/audio/getGold.wav');
-    scene.load.audio('dead', 'assets/audio/dead.wav');
-    scene.load.audio('pass', 'assets/audio/pass.wav');
-    scene.load.audio('fall', 'assets/audio/fall.wav');
+    scene.load.audio('dig', './assets/audio/dig.wav');
+    scene.load.audio('getGold', './assets/audio/getGold.wav');
+    scene.load.audio('dead', './assets/audio/dead.wav');
+    scene.load.audio('pass', './assets/audio/pass.wav');
+    scene.load.audio('fall', './assets/audio/fall.wav');
     
     // Load level completion music
-    scene.load.audio('goldFinish1', 'assets/audio/goldFinish1.mp3');
-    scene.load.audio('goldFinish2', 'assets/audio/goldFinish2.mp3');
-    scene.load.audio('goldFinish3', 'assets/audio/goldFinish3.mp3');
+    scene.load.audio('goldFinish1', './assets/audio/goldFinish1.mp3');
+    scene.load.audio('goldFinish2', './assets/audio/goldFinish2.mp3');
+    scene.load.audio('goldFinish3', './assets/audio/goldFinish3.mp3');
 
     // Load animation definition files
-    scene.load.json('runner-anims', 'assets/anims/runner.json');
-    scene.load.json('guard-anims', 'assets/anims/guard.json');
-    scene.load.json('hole-anims', 'assets/anims/hole.json');
+    scene.load.json('runner-anims', './assets/anims/runner.json');
+    scene.load.json('guard-anims', './assets/anims/guard.json');
+    scene.load.json('hole-anims', './assets/anims/hole.json');
   }
 
   // Create player animations from IBM runner atlas using JSON definitions

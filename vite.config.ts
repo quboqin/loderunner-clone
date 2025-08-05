@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  base: './',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -14,6 +15,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: 'esbuild',
+    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -24,5 +26,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['phaser']
-  }
+  },
+  publicDir: 'public'
 });
