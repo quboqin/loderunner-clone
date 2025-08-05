@@ -4,17 +4,26 @@ import { SCENE_KEYS } from '@/config/GameConfig';
 export class MenuScene extends Scene {
   private selectedOption = 0;
   private menuOptions: Phaser.GameObjects.Text[] = [];
+  private isInDialog = false;
 
   constructor() {
     super({ key: SCENE_KEYS.MENU });
   }
 
   create(): void {
+    console.log('MenuScene: create() called');
     this.cameras.main.setBackgroundColor('#001122');
+    
+    // Reset state
+    this.selectedOption = 0;
+    this.menuOptions = [];
+    this.isInDialog = false;
     
     this.createTitle();
     this.createMenu();
     this.setupInput();
+    
+    console.log('MenuScene: initialization complete, menuOptions:', this.menuOptions.length);
   }
 
   private createTitle(): void {
@@ -74,16 +83,30 @@ export class MenuScene extends Scene {
     });
 
     this.input.keyboard!.on('keydown-ENTER', () => {
-      this.selectOption();
+      if (!this.isInDialog) {
+        this.selectOption();
+      }
     });
 
     this.input.keyboard!.on('keydown-SPACE', () => {
-      this.selectOption();
+      if (!this.isInDialog) {
+        this.selectOption();
+      }
     });
   }
 
   private updateMenuHighlight(): void {
+    if (!this.menuOptions || this.menuOptions.length === 0) {
+      console.warn('MenuScene: menuOptions not initialized');
+      return;
+    }
+    
     this.menuOptions.forEach((option, index) => {
+      if (!option) {
+        console.warn(`MenuScene: menu option at index ${index} is null`);
+        return;
+      }
+      
       if (index === this.selectedOption) {
         option.setColor('#ffff00');
         option.setScale(1.1);
@@ -109,6 +132,7 @@ export class MenuScene extends Scene {
   }
 
   private showInstructions(): void {
+    this.isInDialog = true;
     const centerX = this.cameras.main.width / 2;
 
     const instructions = this.add.group();
@@ -145,10 +169,12 @@ export class MenuScene extends Scene {
 
     this.input.keyboard!.once('keydown-SPACE', () => {
       instructions.destroy(true);
+      this.isInDialog = false;
     });
   }
 
   private showCredits(): void {
+    this.isInDialog = true;
     const centerX = this.cameras.main.width / 2;
 
     const credits = this.add.group();
@@ -184,6 +210,7 @@ export class MenuScene extends Scene {
 
     this.input.keyboard!.once('keydown-SPACE', () => {
       credits.destroy(true);
+      this.isInDialog = false;
     });
   }
 }

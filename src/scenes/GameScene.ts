@@ -161,6 +161,7 @@ export class GameScene extends Scene {
     
     this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D,Z,X') as { [key: string]: Phaser.Input.Keyboard.Key };
 
+    // ESC key to return to menu
     this.input.keyboard!.on('keydown-ESC', () => {
       this.scene.start(SCENE_KEYS.MENU);
     });

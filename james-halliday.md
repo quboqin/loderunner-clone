@@ -68,12 +68,13 @@ commit this replace, but the Day 1 tasks are still not finished, let me verify
 
 19. It's still incorrect. This time the error is![alt text](<Screenshot 2025-08-05 at 9.41.03 AM.png>)
 
-20. 从17-19， 我发现你陷在Vercel的部署问题里了，目前的解决搞错了方向， 请先回滚到1d3f6c2这次提交. 我先check替他问题 
+20. 从17-19， 我发现你陷在Vercel的部署问题里了，目前的解决搞错了方向， 请先回滚到1d3f6c2这次提交. 我先check其他问题 
 
 I found that you are stuck in the Vercel deployment issue. The current solution is going in the wrong direction. Please roll back to the commit 1d3f6c2 first. I'll first check for other problems
 
 > @james-halliday.md cannot be used as a file name. This name has been preemptively registered by a little bear. Change the file name to @uncle-bob.md
 
 21. Bug fix
-- ![alt text](<Screenshot 2025-08-05 at 12.11.35 PM.png>) pressed `space`, but it does not return to the main menu, figout the issue, don't commit and don't push
-- When I enter into a new game, and press `ESC`, it also can not return to the main menu
+  1. ![alt text](<Screenshot 2025-08-05 at 12.11.35 PM.png>) pressed `space`, but it does not return to the main menu, figout the issue, don't commit and don't push
+  2. When I enter into a new game, and press `ESC`, it also can not return to the main menu...... still doesn't work
+  ![alt text](<Screenshot 2025-08-05 at 12.27.59 PM.png>)
