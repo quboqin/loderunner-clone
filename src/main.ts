@@ -36,7 +36,7 @@ const gameConfig: Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { x: 0, y: 0 },
+      gravity: { x: 0, y: 800 }, // Enable gravity for falling
       debug: false
     }
   },
@@ -65,5 +65,5 @@ window.addEventListener('DOMContentLoaded', () => {
   // Add global game reference for debugging
   (window as any).game = game;
   
-  console.log('Lode Runner Clone initialized!');
+  // Game initialized
 });

@@ -11,7 +11,6 @@ export class MenuScene extends Scene {
   }
 
   create(): void {
-    console.log('MenuScene: create() called');
     this.cameras.main.setBackgroundColor('#001122');
     
     // Reset state
@@ -23,7 +22,6 @@ export class MenuScene extends Scene {
     this.createMenu();
     this.setupInput();
     
-    console.log('MenuScene: initialization complete, menuOptions:', this.menuOptions.length);
   }
 
   private createTitle(): void {

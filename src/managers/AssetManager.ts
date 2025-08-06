@@ -255,11 +255,11 @@ export class AssetManager {
     
     // Add progress tracking
     scene.load.on('progress', (progress: number) => {
-      console.log(`Loading progress: ${Math.round(progress * 100)}%`);
+      // Loading progress tracking
     });
 
     scene.load.on('complete', () => {
-      console.log('All assets loaded successfully');
+      // All assets loaded
     });
   }
 }

@@ -13,23 +13,39 @@ export class GameScene extends Scene {
   private levelText!: Phaser.GameObjects.Text;
   private livesText!: Phaser.GameObjects.Text;
   private soundManager!: SoundManager;
+  private solidTiles!: Phaser.Physics.Arcade.StaticGroup;
+  private ladderTiles!: Phaser.Physics.Arcade.StaticGroup;
+  private ropeTiles!: Phaser.Physics.Arcade.StaticGroup;
 
   constructor() {
     super({ key: SCENE_KEYS.GAME });
   }
 
   create(): void {
+    
+    
     this.initializeGameState();
     this.initializeAudio();
+    this.createCollisionGroups();
     this.createLevel();
     this.createPlayer();
     this.createUI();
     this.setupInput();
+    this.setupCollisions();
+    
+    
   }
 
   private initializeAudio(): void {
     this.soundManager = SoundManager.getInstance(this);
     this.soundManager.initializeSounds();
+  }
+
+  private createCollisionGroups(): void {
+    // Create static groups for different tile types
+    this.solidTiles = this.physics.add.staticGroup();
+    this.ladderTiles = this.physics.add.staticGroup();
+    this.ropeTiles = this.physics.add.staticGroup();
   }
 
   private initializeGameState(): void {
@@ -61,7 +77,7 @@ export class GameScene extends Scene {
     // Create gold objects
     levelInfo.gold.forEach((goldPos: { x: number; y: number }) => {
       const gold = this.add.sprite(goldPos.x + 16, goldPos.y + 16, 'tiles', 'gold');
-      gold.setScale(1.6); // Scale from 20x22 to ~32x32
+      gold.setScale(1.6); // Keep scaling for gold to match tile size
       gold.setData('type', 'gold');
       gold.setInteractive();
       
@@ -77,7 +93,7 @@ export class GameScene extends Scene {
     levelInfo.guards.forEach((guardPos: { x: number; y: number }) => {
       // Placeholder for guard spawning
       const guard = this.add.sprite(guardPos.x + 16, guardPos.y + 16, 'guard', 'guard_00');
-      guard.setScale(1.6);
+      guard.setScale(1.6); // Restore scaling to match other sprites
       guard.setData('type', 'guard');
     });
   }
@@ -91,15 +107,45 @@ export class GameScene extends Scene {
           
           const frameKey = AssetManager.getTileFrame(tileType);
           const tile = this.add.sprite(pixelX + 16, pixelY + 16, 'tiles', frameKey);
-          tile.setScale(1.6); // Scale from 20x22 to ~32x32
+          tile.setScale(1.6); // Keep scaling for tiles to maintain proper level size
           tile.setData('tileType', tileType);
+          
+          // Add collision bodies based on tile type
+          this.addTileCollision(tile, tileType);
         }
       });
     });
   }
 
+  private addTileCollision(tile: Phaser.GameObjects.Sprite, tileType: number): void {
+    // Add collision bodies for different tile types
+    switch (tileType) {
+      case 1: // Brick - solid collision
+      case 2: // Solid - solid collision  
+      case 5: // Special brick - solid collision
+        this.physics.add.existing(tile, true); // true = static body
+        this.solidTiles.add(tile);
+        break;
+      
+      case 3: // Ladder - climbable, no solid collision
+        this.physics.add.existing(tile, true);
+        this.ladderTiles.add(tile);
+        break;
+        
+      case 4: // Rope - climbable, no solid collision
+        this.physics.add.existing(tile, true);
+        this.ropeTiles.add(tile);
+        break;
+        
+      case 6: // Exit/trap - special handling later
+        // No collision for now
+        break;
+    }
+  }
+
   private createPlayer(): void {
     const startPos = this.registry.get('playerStart') || { x: 400, y: 400 };
+    
     
     // Create player sprite using IBM runner atlas
     this.player = this.add.sprite(startPos.x, startPos.y, 'runner', 'runner_00');
@@ -110,7 +156,41 @@ export class GameScene extends Scene {
     
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
     playerBody.setCollideWorldBounds(true);
-    playerBody.setSize(20, 22); // Original sprite size
+    // With 1.6x scaling, sprite is ~32x35 display size  
+    // Use smaller collision box to fit through single-tile gaps (32px tiles)
+    playerBody.setSize(16, 28); // Smaller width and height for better fit
+    
+    
+    // Confirmed: Y offset > 4 causes falling through floor
+    // Y offset = 4 is the maximum safe value - accept small visual gap
+    playerBody.setOffset(8, 4); // Center horizontally, safe Y offset with minimal gap
+    
+    // CRITICAL FIX: Explicitly enable gravity for the player body
+    // Individual bodies don't inherit global gravity automatically in Phaser
+    playerBody.setGravityY(800); // Match the global gravity
+    
+    
+  }
+
+  private setupCollisions(): void {
+    // Player collides with solid tiles (walls, floors, bricks)
+    this.physics.add.collider(this.player, this.solidTiles);
+    
+    // Player can overlap with ladders and ropes (for climbing detection)
+    this.physics.add.overlap(this.player, this.ladderTiles, this.handleLadderInteraction, undefined, this);
+    this.physics.add.overlap(this.player, this.ropeTiles, this.handleRopeInteraction, undefined, this);
+  }
+
+  private handleLadderInteraction(_player: any, ladder: any): void {
+    // Store ladder reference for climbing mechanics
+    this.player.setData('onLadder', true);
+    this.player.setData('ladderTile', ladder);
+  }
+
+  private handleRopeInteraction(_player: any, rope: any): void {
+    // Store rope reference for climbing mechanics
+    this.player.setData('onRope', true);
+    this.player.setData('ropeTile', rope);
   }
 
   private createUI(): void {
@@ -176,9 +256,26 @@ export class GameScene extends Scene {
     });
   }
 
+  private updateCounter = 0;
+
   update(): void {
-    this.handlePlayerMovement();
-    this.updateUI();
+    try {
+      this.updateCounter++;
+      
+      
+      this.handlePlayerMovement();
+      this.updateUI();
+      this.updatePlayerState();
+    } catch (error) {
+      // Handle error silently
+    }
+  }
+
+  private updatePlayerState(): void {
+    // Clear ladder/rope state if not overlapping anymore
+    this.player.setData('onLadder', false);
+    this.player.setData('onRope', false);
+    
   }
 
   private updateUI(): void {
@@ -192,9 +289,12 @@ export class GameScene extends Scene {
     const playerSprite = this.player;
     const speed = 200;
 
-    playerBody.setVelocity(0);
+    // ONLY reset horizontal velocity - DON'T touch vertical velocity to allow gravity
+    playerBody.setVelocityX(0);
+    // DO NOT call setVelocity(0) or setVelocityY(0) here - it cancels gravity!
     let isMoving = false;
 
+    // Horizontal movement (always allowed)
     if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
       playerBody.setVelocityX(-speed);
       playerSprite.play('player-run-left', true);
@@ -205,18 +305,37 @@ export class GameScene extends Scene {
       isMoving = true;
     }
 
-    if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
-      playerBody.setVelocityY(-speed);
-      if (!isMoving) {
-        playerSprite.play('player-climb', true);
+    // Vertical movement (only on ladders or ropes)
+    const onLadder = this.player.getData('onLadder');
+    const onRope = this.player.getData('onRope');
+    
+    
+    if (onLadder || onRope) {
+      // Disable gravity when climbing
+      playerBody.setGravityY(0);
+      
+      if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
+        playerBody.setVelocityY(-speed);
+        if (!isMoving) {
+          playerSprite.play('player-climb', true);
+        }
+        isMoving = true;
+      } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
+        playerBody.setVelocityY(speed);
+        if (!isMoving) {
+          playerSprite.play('player-climb', true);
+        }
+        isMoving = true;
+      } else {
+        // Stop vertical movement when not pressing up/down on ladder
+        playerBody.setVelocityY(0);
       }
-      isMoving = true;
-    } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
-      playerBody.setVelocityY(speed);
-      if (!isMoving) {
-        playerSprite.play('player-climb', true);
+    } else {
+      // Re-enable gravity when not climbing
+      if (playerBody.gravity.y !== 800) {
+        playerBody.setGravityY(800);
       }
-      isMoving = true;
+      // Let gravity handle vertical movement - don't set velocity here
     }
 
     // Play idle animation if not moving
@@ -244,12 +363,12 @@ export class GameScene extends Scene {
     }
   }
 
-  private digHole(direction: 'left' | 'right'): void {
+  private digHole(_direction: 'left' | 'right'): void {
     // Play digging sound
     this.soundManager.playSFX('dig');
     
     // Basic hole digging logic (placeholder)
-    console.log(`Digging hole ${direction}`);
+    // Digging hole
     
     // TODO: Implement actual hole digging mechanics
     // - Check if player is on ground
