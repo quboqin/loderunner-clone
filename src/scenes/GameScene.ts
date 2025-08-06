@@ -16,6 +16,11 @@ export class GameScene extends Scene {
   private solidTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ladderTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ropeTiles!: Phaser.Physics.Arcade.StaticGroup;
+  
+  // Debug visuals - simple on/off system
+  private debugMode = false;
+  private debugGraphics!: Phaser.GameObjects.Graphics;
+  private debugText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: SCENE_KEYS.GAME });
@@ -32,13 +37,33 @@ export class GameScene extends Scene {
     this.createUI();
     this.setupInput();
     this.setupCollisions();
-    
+    this.initializeDebug();
     
   }
 
   private initializeAudio(): void {
     this.soundManager = SoundManager.getInstance(this);
     this.soundManager.initializeSounds();
+  }
+
+  private initializeDebug(): void {
+    // Create debug graphics for visual overlays
+    this.debugGraphics = this.add.graphics();
+    this.debugGraphics.setDepth(1000); // Render on top of everything
+    
+    // Create debug text display
+    this.debugText = this.add.text(10, 100, '', {
+      fontSize: '14px',
+      color: '#00ff00',
+      fontFamily: 'monospace',
+      backgroundColor: '#000000aa',
+      padding: { x: 8, y: 4 }
+    });
+    this.debugText.setDepth(1001);
+    
+    // Initially hidden
+    this.debugGraphics.setVisible(false);
+    this.debugText.setVisible(false);
   }
 
   private createCollisionGroups(): void {
@@ -158,12 +183,17 @@ export class GameScene extends Scene {
     playerBody.setCollideWorldBounds(true);
     // With 1.6x scaling, sprite is ~32x35 display size  
     // Use smaller collision box to fit through single-tile gaps (32px tiles)
-    playerBody.setSize(16, 28); // Smaller width and height for better fit
+    // IMPORTANT: setSize() multiplies by sprite scale, so compensate for 1.6x scale
+    const desiredBodyWidth = 16;
+    const desiredBodyHeight = 28;
+    const spriteScale = 1.6;
+    playerBody.setSize(desiredBodyWidth / spriteScale, desiredBodyHeight / spriteScale);
     
     
-    // Confirmed: Y offset > 4 causes falling through floor
-    // Y offset = 4 is the maximum safe value - accept small visual gap
-    playerBody.setOffset(8, 4); // Center horizontally, safe Y offset with minimal gap
+    // IMPORTANT: setOffset() also multiplies by sprite scale, so compensate for 1.6x scale
+    const desiredOffsetX = 8; // Center horizontally 
+    const desiredOffsetY = 4; // Safe Y offset with minimal gap
+    playerBody.setOffset(desiredOffsetX / spriteScale, desiredOffsetY / spriteScale);
     
     // CRITICAL FIX: Explicitly enable gravity for the player body
     // Individual bodies don't inherit global gravity automatically in Phaser
@@ -254,6 +284,11 @@ export class GameScene extends Scene {
     this.input.keyboard!.on('keydown-X', () => {
       this.digHole('right');
     });
+
+    // Debug mode toggle (simple on/off)
+    this.input.keyboard!.on('keydown-D', () => {
+      this.toggleDebugMode();
+    });
   }
 
   private updateCounter = 0;
@@ -266,6 +301,10 @@ export class GameScene extends Scene {
       this.handlePlayerMovement();
       this.updateUI();
       this.updatePlayerState();
+      
+      if (this.debugMode) {
+        this.updateDebugVisuals();
+      }
     } catch (error) {
       // Handle error silently
     }
@@ -401,5 +440,108 @@ export class GameScene extends Scene {
       // For now, restart the same level
       this.scene.restart();
     });
+  }
+
+  private toggleDebugMode(): void {
+    this.debugMode = !this.debugMode;
+    this.debugGraphics.setVisible(this.debugMode);
+    this.debugText.setVisible(this.debugMode);
+    
+    if (!this.debugMode) {
+      this.debugGraphics.clear();
+    }
+  }
+
+  private updateDebugVisuals(): void {
+    if (!this.player || !this.debugMode) return;
+    
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    this.debugGraphics.clear();
+    
+    // 1. Red Rectangle: Visual sprite bounds
+    const spriteBounds = {
+      x: this.player.x - this.player.displayWidth / 2,
+      y: this.player.y - this.player.displayHeight / 2,
+      width: this.player.displayWidth,
+      height: this.player.displayHeight
+    };
+    this.debugGraphics.lineStyle(3, 0xff0000, 1);
+    this.debugGraphics.strokeRect(spriteBounds.x, spriteBounds.y, spriteBounds.width, spriteBounds.height);
+    
+    // 2. Blue Rectangle: Collision body bounds
+    const bodyBounds = {
+      x: playerBody.x,
+      y: playerBody.y,
+      width: playerBody.width,
+      height: playerBody.height
+    };
+    this.debugGraphics.lineStyle(3, 0x0000ff, 1);
+    this.debugGraphics.strokeRect(bodyBounds.x, bodyBounds.y, bodyBounds.width, bodyBounds.height);
+    
+    // 3. Green Grid: Tile grid overlay (around player)
+    const tileSize = GAME_CONFIG.tileSize;
+    const playerTileX = Math.floor(this.player.x / tileSize);
+    const playerTileY = Math.floor(this.player.y / tileSize);
+    
+    // Draw 3x3 grid around player
+    for (let tx = playerTileX - 1; tx <= playerTileX + 1; tx++) {
+      for (let ty = playerTileY - 1; ty <= playerTileY + 1; ty++) {
+        const tileX = tx * tileSize;
+        const tileY = ty * tileSize;
+        this.debugGraphics.lineStyle(1, 0x00ff00, 0.6);
+        this.debugGraphics.strokeRect(tileX, tileY, tileSize, tileSize);
+      }
+    }
+    
+    // 4. Yellow Dot: Sprite center point
+    this.debugGraphics.lineStyle(0, 0x000000, 0);
+    this.debugGraphics.fillStyle(0xffff00, 1);
+    this.debugGraphics.fillCircle(this.player.x, this.player.y, 4);
+    
+    // 5. Orange Dot: Body center point
+    const bodyCenterX = playerBody.x + playerBody.width / 2;
+    const bodyCenterY = playerBody.y + playerBody.height / 2;
+    this.debugGraphics.fillStyle(0xff8800, 1);
+    this.debugGraphics.fillCircle(bodyCenterX, bodyCenterY, 3);
+    
+    // Update debug text with all coordinate information
+    this.updateDebugText(playerBody, bodyCenterX, bodyCenterY);
+  }
+
+  private updateDebugText(playerBody: Phaser.Physics.Arcade.Body, bodyCenterX: number, bodyCenterY: number): void {
+    const onLadder = this.player.getData('onLadder');
+    const onRope = this.player.getData('onRope');
+    
+    const debugInfo = [
+      'DEBUG MODE - All Sprite & Body Coordinates',
+      '(Press D to toggle off)',
+      '',
+      '=== SPRITE INFORMATION ===',
+      `Sprite Center (x,y): (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`,
+      `Sprite Size: ${this.player.displayWidth.toFixed(1)} x ${this.player.displayHeight.toFixed(1)}`,
+      `Sprite Scale: ${this.player.scaleX}`,
+      '',
+      '=== COLLISION BODY INFORMATION ===',
+      `Body Position (x,y): (${playerBody.x.toFixed(1)}, ${playerBody.y.toFixed(1)})`,
+      `Body Center (x,y): (${bodyCenterX.toFixed(1)}, ${bodyCenterY.toFixed(1)})`,
+      `Body Size: ${playerBody.width} x ${playerBody.height}`,
+      `Body Offset: (${playerBody.offset.x}, ${playerBody.offset.y})`,
+      '',
+      '=== PHYSICS INFORMATION ===',
+      `Velocity: (${playerBody.velocity.x.toFixed(1)}, ${playerBody.velocity.y.toFixed(1)})`,
+      `Gravity: ${playerBody.gravity.y}`,
+      `Blocked: ${JSON.stringify(playerBody.blocked)}`,
+      `On Ladder: ${onLadder}`,
+      `On Rope: ${onRope}`,
+      '',
+      '=== VISUAL LEGEND ===',
+      'RED: Sprite bounds (visual)',
+      'BLUE: Collision body (physics)',
+      'GREEN: Tile grid (32x32)',
+      'YELLOW: Sprite center',
+      'ORANGE: Body center'
+    ];
+    
+    this.debugText.setText(debugInfo.join('\n'));
   }
 }

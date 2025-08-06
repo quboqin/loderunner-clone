@@ -254,7 +254,7 @@ export class AssetManager {
     scene.load.maxParallelDownloads = 4;
     
     // Add progress tracking
-    scene.load.on('progress', (progress: number) => {
+    scene.load.on('progress', (_progress: number) => {
       // Loading progress tracking
     });
 

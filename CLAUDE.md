@@ -70,3 +70,7 @@ When integrating assets from the reference repository:
 ## Deployment Notes
 
 - Deploy this game onto Vercel
+
+## Claude Interaction Guidelines
+
+- Every time you finish modifying a feature, confirm with me first and don't submit the code immediately.

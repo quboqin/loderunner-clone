@@ -101,3 +101,45 @@ I think we've only completed most of the work for Day 1 - 2 and Day 3 - 4. The '
 Day 8 and Day 9 are also not completed yet
 
 25. create a folder named screenshots, and move all screenshot files(file names starting with Screenshot 2025-08-) into this folder, and update all links in uncle-bob.md file
+
+## Day 2
+26. create a feature branch for implement collision detection
+
+27. let's start with the four critical features in current sprint
+yes, after finishing each feature, don't commit code, let me check first
+
+  Two problems
+  1. The roof is too low, or the Player and Guard are too tall. When walking left or right, their heads hit the roof and they can't pass through.
+  2. It's incorrect that one can move up and down without a ladder.
+  ![alt text](<screenshots/Screenshot 2025-08-06 at 11.28.02 AM.png>)
+
+  > Add a rule to the memory. Every time you finish modifying a feature, confirm with me first and don't submit the code immediately.
+  3. When the game starts, the PLAYER doesn't fall to the ground and remains floating in the air.
+  ![alt text](<screenshots/Screenshot 2025-08-06 at 11.40.18 AM.png>)
+
+You said that the Player is on the ground(or standing on a solid surface), but from the screenshot![alt text](<screenshots/Screenshot 2025-08-06 at 3.11.36 PM.png>), There is still a gap between the player and the ground. Should the y-axis direction also be adjusted after the size of the Player is reduced?
+
+
+
+Is it possible to mark the actual size of the Player, the enlarged size, the collision range, and the Offset on the Sprite with different colors to help me identify the problem?
+
+Press 'D' for the first time to display the Player. Press 'D' again to overlay the Body. Press 'D' once more to remove all Debug information.
+
+Draw the dimensions and coordinate relationships of the Player's Sprite and Body in markdown format according to the Phaser documentation and the settings in GameScene.ts
+Output it as a separate Markdown file
+
+you set the size of body is
+playerBody.setSize(16, 28);
+but I dump the size on the screen 
+Body Size: ${playerBody.width} x ${playerBody.height}
+![alt text](<screenshots/Screenshot 2025-08-06 at 8.46.21 PM.png>)
+width is 25.6, height is 44.8
+Where was this value changed?
+
+Change it back so that pressing 'D' once will display the coordinate information of all Sprites and Bodies, and the Position of the Body will also display the coordinates of the center point for easy understanding.
+
+Is the value of playerBody.setOffset(8, 4) also affected by the scale of 1.6? If so, please correct it.
+
+28. remove the PLAYER_DIMENSIONS.md file, commit all changes
+
+add 4 screenshots, change CLAUDE.md and uncle-bob.md file, please amend last commit, and commit again 
