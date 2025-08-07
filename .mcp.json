@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "local-playwright": {
+      "command": "node",
+      "args": [
+        "./tests/config/local-mcp-bridge.js",
+        "--mcp"
+      ],
+      "env": {
+        "NODE_ENV": "development",
+        "PLAYWRIGHT_BROWSERS_PATH": "/Users/qinqubo/Library/Caches/ms-playwright",
+        "BROWSER_CONFIG_PATH": "./tests/config/browser.config.js",
+        "PROJECT_ROOT": "."
+      }
+    }
+  }
+}

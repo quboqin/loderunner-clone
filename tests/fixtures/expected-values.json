@@ -1,0 +1,54 @@
+{
+  "playerPhysics": {
+    "bodySize": {
+      "width": 16,
+      "height": 28,
+      "description": "Expected collision body size after scaling compensation"
+    },
+    "bodyOffset": {
+      "x": 8,
+      "y": 4,
+      "description": "Expected collision body offset after scaling compensation"
+    },
+    "spriteSize": {
+      "width": 32,
+      "height": 35.2,
+      "description": "Expected visual sprite size (20x22 * 1.6 scale)"
+    },
+    "spriteScale": 1.6
+  },
+  "tileSystem": {
+    "tileSize": 32,
+    "description": "Standard tile size in pixels"
+  },
+  "debugOutput": {
+    "expectedBodySizeText": "Body Size: 16 x 28",
+    "expectedOffsetText": "Body Offset: (8, 4)",
+    "invalidBodySizeText": "Body Size: 25.6 x 44.8",
+    "invalidOffsetText": "Body Offset: (12.8, 6.4)"
+  },
+  "physicsValidation": {
+    "gravity": 800,
+    "maxPlayerHeight": 35.2,
+    "minCeilingClearance": 32,
+    "description": "Player should fit through 32px height openings"
+  },
+  "bug27ValidationTests": {
+    "bodyHeightFitsInTile": {
+      "maxBodyHeight": 28,
+      "tileHeight": 32,
+      "shouldPass": true,
+      "description": "Player body should fit in single tile height"
+    },
+    "playerFallsWithGravity": {
+      "expectedGravity": 800,
+      "velocityYWhenFalling": "> 0",
+      "description": "Player should fall when not on solid ground"
+    },
+    "verticalMovementOnlyOnLadders": {
+      "onLadderRequired": true,
+      "onRopeRequired": true,
+      "description": "Up/down movement should only work on ladders or ropes"
+    }
+  }
+}
