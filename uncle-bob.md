@@ -224,3 +224,26 @@ Look at this picture. The state is on the Rope, but the Y value is still too low
 Y position is still too low![alt text](<screenshots/Screenshot 2025-08-08 at 2.27.50 PM.png>)
 
 When passing by the top of the ladder, the player will drop a little bit. The player should be standing on it instead of dropping. On the rope, the player should be able to press the down arrow key to jump down.
+
+On the top of the Ladder, I can't move down. Please consider the logic carefully.
+
+  1. Are you able to move left/right at this position? Yes
+  2. If you jump (if there's a jump key), do you fall down?
+  3. What happens if you move left or right - do you eventually fall
+  fall?
+
+⏺ Perfect! Now the collision logic is fixed. The key change is
+  that when you press the down arrow key while standing above a
+  ladder tile, it will allow you to pass through and start
+  climbing down, rather than being blocked by the collision.
+
+
+>  What this fix does:
+>  1. When you press DOWN: You can now pass through the ladder tile
+>   collision and start climbing
+>  2. When moving up: Pass-through continues to work as before
+>  3. When climbing: Prevents getting stuck in climbing states
+>
+>  Now when you're at that position where you were stuck, pressing
+>  the down arrow should allow you to drop down onto the ladder
+>  tile below and start climbing down!  

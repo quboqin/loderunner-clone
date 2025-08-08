@@ -217,14 +217,29 @@ export class GameScene extends Scene {
         const playerBottom = playerBody.y + playerBody.height;
         const tileTop = tile.body.y;
         const movingUp = playerBody.velocity.y < 0;
+        const movingDown = playerBody.velocity.y > 0;
         
-        // If player is moving up or is climbing, allow pass-through
+        // Get climbing state and movement input
         const isClimbing = this.player.getData('onLadder');
-        if (movingUp || isClimbing) {
-          return false; // Allow pass-through when climbing up
+        const hasDownInput = this.cursors.down.isDown || this.wasdKeys.S.isDown;
+        
+        // If player is moving up, always allow pass-through
+        if (movingUp) {
+          return false; // Allow pass-through when moving up through ladder
         }
         
-        // Only collide if player is coming from above
+        // If player is pressing down (wants to climb down), allow pass-through
+        // This handles both cases: climbing down while on ladder, and entering ladder from above
+        if (hasDownInput) {
+          return false; // Allow pass-through when intentionally moving down
+        }
+        
+        // If player is already climbing, allow pass-through to prevent getting stuck
+        if (isClimbing) {
+          return false; // Allow pass-through when in climbing state
+        }
+        
+        // Only collide if player is coming from above (normal falling onto ladder top)
         return playerBottom <= tileTop + 5; // Small tolerance for platform collision
       }
       
@@ -298,7 +313,7 @@ export class GameScene extends Scene {
     });
 
     // Debug mode toggle (simple on/off)
-    this.input.keyboard!.on('keydown-D', () => {
+    this.input.keyboard!.on('keydown-J', () => {
       this.toggleDebugMode();
     });
   }
@@ -346,12 +361,13 @@ export class GameScene extends Scene {
       { x: playerCenterX, y: playerCenterY - (playerHalfHeight * 0.7) }
     ];
     
+    
     // Reset climbing states
     let onLadder = false;
     let onRope = false;
     
     // Track which detection points find ladders/ropes for debugging
-    let detectionResults = [];
+    let detectionResults: string[] = [];
     
     // Check for vertical input to determine climbing intent
     const movingUp = this.cursors.up.isDown || this.wasdKeys.W.isDown;
@@ -368,17 +384,19 @@ export class GameScene extends Scene {
       
       // Check all ladder tiles - use all detection points for ladders
       this.ladderTiles.children.entries.forEach((tile: any) => {
-        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
+        // So to get tile grid coordinates, we need to subtract 16 before dividing
+        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
+        
         
         // Check if this detection point overlaps with ladder tile
         if (tileTileX === tileX && tileTileY === tileY) {
-          // Only activate ladder if player has vertical input OR is already on ladder
-          const wasOnLadder = this.player.getData('onLadder');
-          if (hasVerticalInput || wasOnLadder) {
-            onLadder = true;
-            foundLadder = true;
-          }
+          // Always detect ladder when player is positioned on one
+          // This allows proper detection at ladder tops without requiring input
+          onLadder = true;
+          foundLadder = true;
+          
         }
       });
       
@@ -397,8 +415,9 @@ export class GameScene extends Scene {
     const jumpingFromRope = this.player.getData('jumpingFromRope');
     if (!jumpingFromRope) {
       this.ropeTiles.children.entries.forEach((tile: any) => {
-        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
+        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
         
         // Check if player center is at the same tile position as rope
         // This ensures consistent detection during horizontal movement
@@ -431,8 +450,9 @@ export class GameScene extends Scene {
       let ropeYPosition = this.player.y; // Default fallback
       
       this.ropeTiles.children.entries.forEach((tile: any) => {
-        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
+        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
         
         // Check if this is the rope tile the player is on
         if (tileTileX === playerTileX && tileTileY === playerTileY) {
@@ -542,7 +562,6 @@ export class GameScene extends Scene {
           isMoving = true;
         } else if (effectiveMovingDown && onRope) {
           // Jump down from rope - release rope and enable gravity
-          console.log('🪂 Jumping down from rope!');
           playerBody.moves = true;
           playerBody.setGravityY(800); // Re-enable gravity
           playerBody.setVelocityY(speed * 1.5); // Stronger initial downward velocity for jumping
@@ -763,7 +782,7 @@ export class GameScene extends Scene {
     
     const debugInfo = [
       'DEBUG MODE - All Sprite & Body Coordinates',
-      '(Press D to toggle off)',
+      '(Press J to toggle off)',
       '',
       '=== SPRITE INFORMATION ===',
       `Sprite Center (x,y): (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`,
