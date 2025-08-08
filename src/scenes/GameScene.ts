@@ -152,9 +152,11 @@ export class GameScene extends Scene {
         this.solidTiles.add(tile);
         break;
       
-      case 3: // Ladder - climbable, no solid collision
+      case 3: // Ladder - climbable with platform-style collision (solid from top)
         this.physics.add.existing(tile, true);
         this.ladderTiles.add(tile);
+        // Also add to solid tiles for top collision support
+        this.solidTiles.add(tile);
         break;
         
       case 4: // Rope - climbable, no solid collision
@@ -203,24 +205,34 @@ export class GameScene extends Scene {
   }
 
   private setupCollisions(): void {
-    // Player collides with solid tiles (walls, floors, bricks)
-    this.physics.add.collider(this.player, this.solidTiles);
+    // Player collides with solid tiles (walls, floors, bricks, and ladder tops)
+    this.physics.add.collider(this.player, this.solidTiles, undefined, (player: any, tile: any) => {
+      const playerBody = player.body as Phaser.Physics.Arcade.Body;
+      const tileData = tile.getData('tileType');
+      
+      // Special handling for ladders - only collide from above (platform behavior)
+      if (tileData === 3) { // Ladder tile
+        // Allow collision only if player is falling/moving down onto ladder top
+        // Block collision if player is moving up through ladder from below
+        const playerBottom = playerBody.y + playerBody.height;
+        const tileTop = tile.body.y;
+        const movingUp = playerBody.velocity.y < 0;
+        
+        // If player is moving up or is climbing, allow pass-through
+        const isClimbing = this.player.getData('onLadder');
+        if (movingUp || isClimbing) {
+          return false; // Allow pass-through when climbing up
+        }
+        
+        // Only collide if player is coming from above
+        return playerBottom <= tileTop + 5; // Small tolerance for platform collision
+      }
+      
+      return true; // Normal collision for non-ladder tiles
+    }, this);
     
-    // Player can overlap with ladders and ropes (for climbing detection)
-    this.physics.add.overlap(this.player, this.ladderTiles, this.handleLadderInteraction, undefined, this);
-    this.physics.add.overlap(this.player, this.ropeTiles, this.handleRopeInteraction, undefined, this);
-  }
-
-  private handleLadderInteraction(_player: any, ladder: any): void {
-    // Store ladder reference for climbing mechanics
-    this.player.setData('onLadder', true);
-    this.player.setData('ladderTile', ladder);
-  }
-
-  private handleRopeInteraction(_player: any, rope: any): void {
-    // Store rope reference for climbing mechanics
-    this.player.setData('onRope', true);
-    this.player.setData('ropeTile', rope);
+    // Note: Ladder and rope detection now handled by position-based continuous detection
+    // in updateClimbableState() method - no overlap handlers needed
   }
 
   private createUI(): void {
@@ -311,10 +323,156 @@ export class GameScene extends Scene {
   }
 
   private updatePlayerState(): void {
-    // Clear ladder/rope state if not overlapping anymore
-    this.player.setData('onLadder', false);
-    this.player.setData('onRope', false);
+    // Check ladder/rope state using continuous position-based detection
+    this.updateClimbableState();
     
+    // Enforce rope Y position lock
+    this.enforceRopeYLock();
+  }
+
+  private updateClimbableState(): void {
+    // Enhanced ladder detection with multiple contact points
+    const playerCenterX = this.player.x;
+    const playerCenterY = this.player.y;
+    
+    // Calculate detection points - center, bottom, and top areas of player
+    const playerHalfHeight = this.player.displayHeight / 2;
+    const detectionPoints = [
+      // Player center - primary detection point
+      { x: playerCenterX, y: playerCenterY },
+      // Near bottom of player - for standing on ladder rungs
+      { x: playerCenterX, y: playerCenterY + (playerHalfHeight * 0.7) },
+      // Near top of player - for reaching ladder tops
+      { x: playerCenterX, y: playerCenterY - (playerHalfHeight * 0.7) }
+    ];
+    
+    // Reset climbing states
+    let onLadder = false;
+    let onRope = false;
+    
+    // Track which detection points find ladders/ropes for debugging
+    let detectionResults = [];
+    
+    // Check for vertical input to determine climbing intent
+    const movingUp = this.cursors.up.isDown || this.wasdKeys.W.isDown;
+    const movingDown = this.cursors.down.isDown || this.wasdKeys.S.isDown;
+    const hasVerticalInput = movingUp || movingDown;
+    
+    // Check each detection point against all ladder tiles
+    detectionPoints.forEach((point, index) => {
+      const tileX = Math.floor(point.x / GAME_CONFIG.tileSize);
+      const tileY = Math.floor(point.y / GAME_CONFIG.tileSize);
+      
+      let foundLadder = false;
+      let foundRope = false;
+      
+      // Check all ladder tiles - use all detection points for ladders
+      this.ladderTiles.children.entries.forEach((tile: any) => {
+        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        
+        // Check if this detection point overlaps with ladder tile
+        if (tileTileX === tileX && tileTileY === tileY) {
+          // Only activate ladder if player has vertical input OR is already on ladder
+          const wasOnLadder = this.player.getData('onLadder');
+          if (hasVerticalInput || wasOnLadder) {
+            onLadder = true;
+            foundLadder = true;
+          }
+        }
+      });
+      
+      // Store detection results for debug display
+      const pointNames = ['Center', 'Bottom', 'Top'];
+      if (foundLadder) {
+        detectionResults.push(`${pointNames[index]}(L)`);
+      }
+    });
+    
+    // Rope detection - Use player center for consistent rope detection during movement
+    const playerTileX = Math.floor(playerCenterX / GAME_CONFIG.tileSize);
+    const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
+    
+    // Don't detect rope if player is jumping from rope
+    const jumpingFromRope = this.player.getData('jumpingFromRope');
+    if (!jumpingFromRope) {
+      this.ropeTiles.children.entries.forEach((tile: any) => {
+        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        
+        // Check if player center is at the same tile position as rope
+        // This ensures consistent detection during horizontal movement
+        if (tileTileX === playerTileX && tileTileY === playerTileY) {
+          onRope = true;
+          detectionResults.push('Center(R)');
+        }
+      });
+    }
+    
+    // Store detection results for debug display
+    this.player.setData('detectionResults', detectionResults);
+    
+    // Priority system: Rope takes priority over ladder when both are detected
+    // This allows natural ladder-to-rope transitions at the top of ladders
+    if (onRope && onLadder) {
+      // When both rope and ladder are detected, prioritize rope
+      onLadder = false;
+      detectionResults.push('RopePriority');
+    }
+    
+    // Update player data
+    this.player.setData('onLadder', onLadder);
+    this.player.setData('onRope', onRope);
+    
+    // Initialize rope Y lock when first touching rope
+    if (onRope && !this.player.getData('wasOnRope')) {
+      // Calculate proper rope hanging position
+      // Find the rope tile Y position and position player to hang from it
+      let ropeYPosition = this.player.y; // Default fallback
+      
+      this.ropeTiles.children.entries.forEach((tile: any) => {
+        const tileTileX = Math.floor(tile.x / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor(tile.y / GAME_CONFIG.tileSize);
+        
+        // Check if this is the rope tile the player is on
+        if (tileTileX === playerTileX && tileTileY === playerTileY) {
+          // Position player to hang from the rope tile
+          // Use rope tile center position for optimal hanging
+          ropeYPosition = tile.y; // Hang at rope center
+        }
+      });
+      
+      this.player.setData('ropeY', ropeYPosition);
+      // Set position after detection to avoid disrupting rope state
+    }
+    this.player.setData('wasOnRope', onRope);
+  }
+  
+  private enforceRopeYLock(): void {
+    const onRope = this.player.getData('onRope');
+    const jumpingFromRope = this.player.getData('jumpingFromRope');
+    
+    // Don't enforce rope lock if jumping from rope
+    if (onRope && !jumpingFromRope) {
+      const lockedY = this.player.getData('ropeY');
+      const wasOnRope = this.player.getData('wasOnRope');
+      
+      if (lockedY !== undefined) {
+        // If just grabbed rope, set position immediately
+        if (onRope && !wasOnRope) {
+          this.player.setY(lockedY);
+        }
+        // Otherwise, enforce position if drifted
+        else if (Math.abs(this.player.y - lockedY) > 0.1) {
+          // Force position back to locked Y
+          this.player.setY(lockedY);
+          
+          // Also update the physics body position to prevent drift
+          const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+          playerBody.y = lockedY - playerBody.height / 2 - playerBody.offset.y;
+        }
+      }
+    }
   }
 
   private updateUI(): void {
@@ -328,9 +486,13 @@ export class GameScene extends Scene {
     const playerSprite = this.player;
     const speed = 200;
 
-    // ONLY reset horizontal velocity - DON'T touch vertical velocity to allow gravity
+    // Get current climbing state
+    const onLadder = this.player.getData('onLadder');
+    const onRope = this.player.getData('onRope');
+    const isClimbing = onLadder || onRope;
+
+    // ALWAYS reset horizontal velocity
     playerBody.setVelocityX(0);
-    // DO NOT call setVelocity(0) or setVelocityY(0) here - it cancels gravity!
     let isMoving = false;
 
     // Horizontal movement (always allowed)
@@ -344,37 +506,107 @@ export class GameScene extends Scene {
       isMoving = true;
     }
 
-    // Vertical movement (only on ladders or ropes)
-    const onLadder = this.player.getData('onLadder');
-    const onRope = this.player.getData('onRope');
-    
-    
-    if (onLadder || onRope) {
-      // Disable gravity when climbing
+    // Handle gravity and vertical movement based on climbing state
+    if (isClimbing) {
+      // CRITICAL: Disable gravity first
       playerBody.setGravityY(0);
       
-      if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
-        playerBody.setVelocityY(-speed);
-        if (!isMoving) {
-          playerSprite.play('player-climb', true);
+      // Check for movement input - ropes allow horizontal movement and jumping down
+      const onRope = this.player.getData('onRope');
+      const movingUp = this.cursors.up.isDown || this.wasdKeys.W.isDown;
+      const movingDown = this.cursors.down.isDown || this.wasdKeys.S.isDown;
+      const movingHorizontal = isMoving; // Already determined above from left/right input
+      
+      // For ropes: ignore up input, but allow down (jump/drop from rope)
+      const effectiveMovingUp = onRope ? false : movingUp;
+      const effectiveMovingDown = movingDown; // Allow down movement for both ladders and ropes
+      const hasAnyInput = effectiveMovingUp || effectiveMovingDown || movingHorizontal;
+      
+      if (hasAnyInput) {
+        // Enable physics when ANY movement is detected
+        playerBody.moves = true;
+        
+        // Handle vertical movement (only for ladders)
+        if (effectiveMovingUp) {
+          playerBody.setVelocityY(-speed);
+          if (!movingHorizontal) {
+            playerSprite.play('player-climb', true);
+          }
+          isMoving = true;
+        } else if (effectiveMovingDown && !onRope) {
+          // Ladder down movement
+          playerBody.setVelocityY(speed);
+          if (!movingHorizontal) {
+            playerSprite.play('player-climb', true);
+          }
+          isMoving = true;
+        } else if (effectiveMovingDown && onRope) {
+          // Jump down from rope - release rope and enable gravity
+          console.log('🪂 Jumping down from rope!');
+          playerBody.moves = true;
+          playerBody.setGravityY(800); // Re-enable gravity
+          playerBody.setVelocityY(speed * 1.5); // Stronger initial downward velocity for jumping
+          
+          // Set jumping flag to prevent rope re-detection
+          this.player.setData('jumpingFromRope', true);
+          this.time.delayedCall(100, () => {
+            this.player.setData('jumpingFromRope', false);
+          });
+          
+          // Clear rope state to release from rope
+          this.player.setData('onRope', false);
+          this.player.setData('wasOnRope', false);
+          this.player.setData('ropeY', undefined);
+          
+          // Use falling animation if available
+          const movingLeft = this.cursors.left.isDown || this.wasdKeys.A.isDown;
+          const movingRight = this.cursors.right.isDown || this.wasdKeys.D.isDown;
+          if (movingLeft) {
+            playerSprite.play('player-fall-left', true);
+          } else if (movingRight) {
+            playerSprite.play('player-fall-right', true);
+          } else {
+            playerSprite.play('player-fall-right', true); // Default falling animation
+          }
+          isMoving = true;
+        } else if (movingHorizontal && onRope) {
+          // Rope horizontal movement - zero all Y forces
+          playerBody.setVelocityY(0);
+          playerBody.setAccelerationY(0);
+          
+          // Use bar animations for rope movement
+          const movingLeft = this.cursors.left.isDown || this.wasdKeys.A.isDown;
+          if (movingLeft) {
+            playerSprite.play('player-bar-left', true);
+          } else {
+            playerSprite.play('player-bar-right', true);
+          }
+        } else if (movingHorizontal && !onRope) {
+          // Ladder horizontal movement
+          playerBody.setVelocityY(0);
+          playerBody.setAccelerationY(0);
         }
-        isMoving = true;
-      } else if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
-        playerBody.setVelocityY(speed);
-        if (!isMoving) {
-          playerSprite.play('player-climb', true);
-        }
-        isMoving = true;
       } else {
-        // Stop vertical movement when not pressing up/down on ladder
+        // CRITICAL FIX: Disable physics only when NO input at all
+        // This prevents sliding while allowing horizontal movement
+        playerBody.moves = false;
         playerBody.setVelocityY(0);
+        playerBody.setAccelerationY(0);
+        
+        // For ropes, use stationary animation when not moving
+        if (onRope) {
+          // Use idle bar animation or first frame of bar sequence
+          playerSprite.play('player-idle'); // Will be replaced with proper rope hang animation
+        }
       }
     } else {
-      // Re-enable gravity when not climbing
+      // Re-enable physics when not climbing
+      playerBody.moves = true;
       if (playerBody.gravity.y !== 800) {
         playerBody.setGravityY(800);
+        playerBody.setAccelerationY(0);
       }
-      // Let gravity handle vertical movement - don't set velocity here
+      // Let gravity handle vertical movement - don't interfere with Y velocity
     }
 
     // Play idle animation if not moving
@@ -511,6 +743,23 @@ export class GameScene extends Scene {
   private updateDebugText(playerBody: Phaser.Physics.Arcade.Body, bodyCenterX: number, bodyCenterY: number): void {
     const onLadder = this.player.getData('onLadder');
     const onRope = this.player.getData('onRope');
+    const isClimbing = onLadder || onRope;
+    
+    // Calculate current tile position
+    const tileX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
+    const tileY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
+    
+    // Track position changes for debugging sliding
+    const prevX = this.player.getData('prevX') || this.player.x;
+    const prevY = this.player.getData('prevY') || this.player.y;
+    const positionDelta = {
+      x: this.player.x - prevX,
+      y: this.player.y - prevY
+    };
+    
+    // Store current position for next frame comparison
+    this.player.setData('prevX', this.player.x);
+    this.player.setData('prevY', this.player.y);
     
     const debugInfo = [
       'DEBUG MODE - All Sprite & Body Coordinates',
@@ -520,6 +769,7 @@ export class GameScene extends Scene {
       `Sprite Center (x,y): (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`,
       `Sprite Size: ${this.player.displayWidth.toFixed(1)} x ${this.player.displayHeight.toFixed(1)}`,
       `Sprite Scale: ${this.player.scaleX}`,
+      `Current Tile: (${tileX}, ${tileY})`,
       '',
       '=== COLLISION BODY INFORMATION ===',
       `Body Position (x,y): (${playerBody.x.toFixed(1)}, ${playerBody.y.toFixed(1)})`,
@@ -529,10 +779,21 @@ export class GameScene extends Scene {
       '',
       '=== PHYSICS INFORMATION ===',
       `Velocity: (${playerBody.velocity.x.toFixed(1)}, ${playerBody.velocity.y.toFixed(1)})`,
+      `Acceleration: (${playerBody.acceleration.x.toFixed(1)}, ${playerBody.acceleration.y.toFixed(1)})`,
       `Gravity: ${playerBody.gravity.y}`,
       `Blocked: ${JSON.stringify(playerBody.blocked)}`,
-      `On Ladder: ${onLadder}`,
-      `On Rope: ${onRope}`,
+      '',
+      '=== CLIMBING STATE ===',
+      `On Ladder: ${onLadder ? '✓' : '✗'}`,
+      `On Rope: ${onRope ? '✓' : '✗'}`,
+      `Is Climbing: ${isClimbing ? '✓' : '✗'}`,
+      `Gravity Disabled: ${playerBody.gravity.y === 0 ? '✓' : '✗'}`,
+      `Detection Points: ${this.player.getData('detectionResults')?.join(', ') || 'None'}`,
+      '',
+      '=== MOVEMENT TRACKING ===',
+      `Position Delta: (${positionDelta.x.toFixed(2)}, ${positionDelta.y.toFixed(2)})`,
+      `Moving Despite 0 Velocity: ${(Math.abs(positionDelta.x) > 0.01 || Math.abs(positionDelta.y) > 0.01) && playerBody.velocity.x === 0 && playerBody.velocity.y === 0 ? '⚠️ YES' : 'No'}`,
+      `Body Moves Enabled: ${playerBody.moves ? '✓' : '🔒 LOCKED'}`,
       '',
       '=== VISUAL LEGEND ===',
       'RED: Sprite bounds (visual)',

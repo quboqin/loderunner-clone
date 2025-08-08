@@ -171,4 +171,56 @@ Are runAutomatedTests and executeWithPlaywright independent of each other?
 
 > !!! A bunch of configuration issues were caused by the version problem of Chromium. ...... After going through a lot of trouble, it was only effective to install Playwright in the project. However, the MCP test has not started yet.
 
+## Day 4
+30. Add ladder and rope climbing mechanics
+As a senior Phaser architect (https://docs.phaser.io/phaser/getting-started/what-is-phaser), it's time to start developing the core game logic. After reviewing the existing implementation in the @GameScene.ts file, please think deeply.
+1. First, implement the movement logic on the ladder.
+   1. The character can move up and down on the ladder.
+   2. When there is no key pressed, the gravity is 0 at this time. With the support of the ladder, the Player remains stationary.  
 
+The function is incorrect. The player is on the ladder and the gravity is 0, but the player slides down automatically without pressing any keys.
+
+The problem still hasn't been solved. I think the parameters are all correct. ![Screenshot on the ladder 1](<screenshots/Screenshot 2025-08-08 at 10.41.39 AM.png>). First, add the modifications to GameScene.ts to the git stage, but don't commit. Think Harder and find out the reason.
+
+  1. Does the sliding stop when on the ladder? No
+  2. What does "Moving Despite 0 Velocity" show? 
+  3. What are the Position Delta values when stationary on ladder?
+  4. Do you see console messages about blocking collisions? Yes
+
+  ![Screenshot on the ladder 2](<screenshots/Screenshot 2025-08-08 at 11.34.14 AM.png>)
+
+Body Moves Enabled: 🔒 LOCKED. The player can now stop on the ladder, but cannot move left or right. I think you may have found the problem, but this solution will cause the problem of not being able to move left or right.
+
+Maybe you've indeed found the problem. Could you summarize the cause of the problem by combining with the Phaser architecture？ Output it as a separate Markdown file
+> [LADDER_SLIDING_TECHNICAL_ANALYSIS](LADDER_SLIDING_TECHNICAL_ANALYSIS.md)
+
+31. I've found another problem. The Player can't stand on the top rung of the ladder. I need to keep pressing the up arrow key to stay in the top position.
+
+32. The Player can't grab the rope, but can stay in the air. After I move left or right, the Y - direction value increases, and then the Player moves downward. This is inconsistent with the expected behavior when moving left or right on the rope.
+
+It is hard to take a snapshot, but I saw that 
+```
+Position Delta: (0.00, 0.22)
+```
+Other values are correct
+- ✅ Velocity: `(0.0, 0.0)` - Correct
+- ✅ Acceleration: `(0.0, 0.0)` - Correct  
+- ✅ Gravity: `0` - Correct
+- ⚠️ Position Delta: `(0.00, 0.22)` - **Player moving despite zero forces**
+But the problem is still excited.
+The value of Y is from 
+Y=376.089 to Y=377.644
+
+When on the rope, there should be no up - and - down movement, and the corresponding animation is also incorrect. When moving left and right on the Rope, use the bar animation in runner.json
+And the value of Y should be loocked, But when I move left and right.
+
+It is incorrect that BRICK or SOLID beside the ladder can be penetrated.
+
+When standing at the top of the Ladder and overlapping with the Rope, the state should switch to the Rope state.
+
+On the rope, one can go down, that is, jump down.
+
+Look at this picture. The state is on the Rope, but the Y value is still too low, resulting in an inability to move left. There is still a gap between the Player and the Rope.
+Y position is still too low![alt text](<screenshots/Screenshot 2025-08-08 at 2.27.50 PM.png>)
+
+When passing by the top of the ladder, the player will drop a little bit. The player should be standing on it instead of dropping. On the rope, the player should be able to press the down arrow key to jump down.
