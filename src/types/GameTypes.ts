@@ -37,3 +37,12 @@ export enum TileType {
   PLAYER_START = 6,
   GUARD_START = 7
 }
+
+export interface HoleData {
+  gridX: number;
+  gridY: number;
+  sprite: Phaser.GameObjects.Sprite;
+  originalTileType: number;
+  regenerationTimer: Phaser.Time.TimerEvent;
+  isDigging: boolean;
+}

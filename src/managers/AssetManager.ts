@@ -144,7 +144,7 @@ export class AssetManager {
     // Create all hole animations from JSON
     createAnimation('hole-dig-left', 'digHoleLeft', 10, 0);
     createAnimation('hole-dig-right', 'digHoleRight', 10, 0);
-    createAnimation('hole-fill', 'fillHole', 4, 0);
+    createAnimation('hole-fill', 'fillHole', 30, 0); // Speed up fill animation from 4 to 30 FPS
   }
 
   // Asset loading utilities for future integration with Roku repository

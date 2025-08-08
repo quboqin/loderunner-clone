@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { SCENE_KEYS, GAME_CONFIG } from '@/config/GameConfig';
-import { GameState } from '@/types/GameTypes';
+import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
 
@@ -16,6 +16,8 @@ export class GameScene extends Scene {
   private solidTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ladderTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ropeTiles!: Phaser.Physics.Arcade.StaticGroup;
+  private holes!: Map<string, HoleData>;
+  private levelTiles!: Map<string, Phaser.GameObjects.Sprite>;
   
   // Debug visuals - simple on/off system
   private debugMode = false;
@@ -71,6 +73,10 @@ export class GameScene extends Scene {
     this.solidTiles = this.physics.add.staticGroup();
     this.ladderTiles = this.physics.add.staticGroup();
     this.ropeTiles = this.physics.add.staticGroup();
+    
+    // Initialize hole management system
+    this.holes = new Map<string, HoleData>();
+    this.levelTiles = new Map<string, Phaser.GameObjects.Sprite>();
   }
 
   private initializeGameState(): void {
@@ -134,6 +140,12 @@ export class GameScene extends Scene {
           const tile = this.add.sprite(pixelX + 16, pixelY + 16, 'tiles', frameKey);
           tile.setScale(1.6); // Keep scaling for tiles to maintain proper level size
           tile.setData('tileType', tileType);
+          tile.setData('gridX', x);
+          tile.setData('gridY', y);
+          
+          // Store tile reference for hole digging
+          const tileKey = `${x},${y}`;
+          this.levelTiles.set(tileKey, tile);
           
           // Add collision bodies based on tile type
           this.addTileCollision(tile, tileType);
@@ -150,6 +162,7 @@ export class GameScene extends Scene {
       case 5: // Special brick - solid collision
         this.physics.add.existing(tile, true); // true = static body
         this.solidTiles.add(tile);
+        tile.setDepth(10); // Standard tile depth
         break;
       
       case 3: // Ladder - climbable with platform-style collision (solid from top)
@@ -157,11 +170,13 @@ export class GameScene extends Scene {
         this.ladderTiles.add(tile);
         // Also add to solid tiles for top collision support
         this.solidTiles.add(tile);
+        tile.setDepth(100); // Higher depth to render above holes
         break;
         
       case 4: // Rope - climbable, no solid collision
         this.physics.add.existing(tile, true);
         this.ropeTiles.add(tile);
+        tile.setDepth(100); // Higher depth to render above holes
         break;
         
       case 6: // Exit/trap - special handling later
@@ -177,6 +192,7 @@ export class GameScene extends Scene {
     // Create player sprite using IBM runner atlas
     this.player = this.add.sprite(startPos.x, startPos.y, 'runner', 'runner_00');
     this.player.setScale(1.6); // Scale from 20x22 to ~32x32
+    this.player.setDepth(1000); // Ensure player renders above all tiles and holes
     this.player.play('player-idle');
     
     this.physics.add.existing(this.player);
@@ -217,7 +233,6 @@ export class GameScene extends Scene {
         const playerBottom = playerBody.y + playerBody.height;
         const tileTop = tile.body.y;
         const movingUp = playerBody.velocity.y < 0;
-        const movingDown = playerBody.velocity.y > 0;
         
         // Get climbing state and movement input
         const isClimbing = this.player.getData('onLadder');
@@ -343,6 +358,9 @@ export class GameScene extends Scene {
     
     // Enforce rope Y position lock
     this.enforceRopeYLock();
+    
+    // Check for holes player might fall through
+    this.checkHoleCollisions();
   }
 
   private updateClimbableState(): void {
@@ -369,10 +387,7 @@ export class GameScene extends Scene {
     // Track which detection points find ladders/ropes for debugging
     let detectionResults: string[] = [];
     
-    // Check for vertical input to determine climbing intent
-    const movingUp = this.cursors.up.isDown || this.wasdKeys.W.isDown;
-    const movingDown = this.cursors.down.isDown || this.wasdKeys.S.isDown;
-    const hasVerticalInput = movingUp || movingDown;
+    // Variables for detection logic
     
     // Check each detection point against all ladder tiles
     detectionPoints.forEach((point, index) => {
@@ -380,7 +395,6 @@ export class GameScene extends Scene {
       const tileY = Math.floor(point.y / GAME_CONFIG.tileSize);
       
       let foundLadder = false;
-      let foundRope = false;
       
       // Check all ladder tiles - use all detection points for ladders
       this.ladderTiles.children.entries.forEach((tile: any) => {
@@ -653,17 +667,285 @@ export class GameScene extends Scene {
     }
   }
 
-  private digHole(_direction: 'left' | 'right'): void {
+  private digHole(direction: 'left' | 'right'): void {
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerGridX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
+    const playerGridY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
+    
+    // Calculate target hole position based on direction
+    let targetX = playerGridX + (direction === 'left' ? -1 : 1);
+    let targetY = playerGridY + 1; // Dig one tile below and to the side
+    
+    // Check if player is on solid ground (can't dig while falling)
+    if (!playerBody.onFloor() && !this.player.getData('onLadder')) {
+      return; // Can't dig while in mid-air
+    }
+    
+    // Check if target position is valid and diggable
+    if (!this.canDigAtPosition(targetX, targetY)) {
+      return; // Can't dig here
+    }
+    
     // Play digging sound
     this.soundManager.playSFX('dig');
     
-    // Basic hole digging logic (placeholder)
-    // Digging hole
+    // Create the hole
+    this.createHole(targetX, targetY, direction);
     
-    // TODO: Implement actual hole digging mechanics
-    // - Check if player is on ground
-    // - Check if there's a brick below to dig
-    // - Create hole sprite and set timer for regeneration
+    // Play player digging animation
+    const digAnimationKey = direction === 'left' ? 'hole-dig-left' : 'hole-dig-right';
+    this.player.play(digAnimationKey);
+    
+    // Return to idle animation after digging
+    this.time.delayedCall(500, () => {
+      if (this.player.anims.currentAnim?.key.includes('hole-dig')) {
+        this.player.play('player-idle');
+      }
+    });
+  }
+
+  private canDigAtPosition(gridX: number, gridY: number): boolean {
+    // Check bounds
+    if (gridX < 0 || gridX >= 28 || gridY < 0 || gridY >= 16) {
+      return false;
+    }
+    
+    // Check if there's already a hole here
+    const holeKey = `${gridX},${gridY}`;
+    if (this.holes.has(holeKey)) {
+      return false;
+    }
+    
+    // Check if there's a diggable tile at this position
+    const tileKey = `${gridX},${gridY}`;
+    const tile = this.levelTiles.get(tileKey);
+    
+    if (!tile) {
+      return false; // No tile to dig
+    }
+    
+    const tileType = tile.getData('tileType');
+    
+    // Only brick tiles (type 1) can be dug
+    return tileType === 1;
+  }
+
+  private createHole(gridX: number, gridY: number, direction: 'left' | 'right'): void {
+    const pixelX = gridX * GAME_CONFIG.tileSize + 16;
+    const pixelY = gridY * GAME_CONFIG.tileSize + 16;
+    
+    // Get the original tile
+    const tileKey = `${gridX},${gridY}`;
+    const originalTile = this.levelTiles.get(tileKey);
+    
+    if (!originalTile) {
+      return;
+    }
+    
+    // CRITICAL FIX: Save tile data BEFORE destroying the tile
+    const originalTileType = originalTile.getData('tileType');
+    
+    // In classic Lode Runner, when digging a hole, we need to preserve any
+    // non-diggable background elements (ropes, ladders) that exist at this position
+    // These should remain visible and functional even with a hole above them
+    
+    // Create hole sprite
+    const holeSprite = this.add.sprite(pixelX, pixelY, 'hole', 0);
+    holeSprite.setScale(1.6);
+    holeSprite.setDepth(50); // Low depth to avoid covering ropes/ladders
+    holeSprite.setAlpha(1); // Ensure full opacity for proper rendering
+    holeSprite.setBlendMode(Phaser.BlendModes.NORMAL); // Use normal blending mode
+    
+    // Play digging animation
+    const digAnimationKey = direction === 'left' ? 'hole-dig-left' : 'hole-dig-right';
+    
+    try {
+      holeSprite.play(digAnimationKey);
+    } catch (error) {
+      // Fallback - set a static frame that represents an open hole
+      holeSprite.setFrame(7); // Final dig frame - should be transparent hole
+    }
+    
+    // Ensure hole sprite doesn't have black background issues
+    holeSprite.setTint(0xffffff); // Neutral white tint to prevent color issues
+    
+    // Remove original tile from collision groups
+    this.removeFromCollisionGroups(originalTile);
+    
+    // Completely destroy the original tile to prevent visual artifacts
+    originalTile.destroy();
+    
+    // Set up regeneration timer (3 seconds)
+    const regenerationTimer = this.time.delayedCall(3000, () => {
+      // Verify hole still exists before filling
+      const currentHoleKey = `${gridX},${gridY}`;
+      if (this.holes.has(currentHoleKey)) {
+        this.fillHole(gridX, gridY);
+      }
+    }, undefined, this); // Use 'this' as context
+    
+    // Store hole data using the saved tile type
+    const holeData: HoleData = {
+      gridX,
+      gridY,
+      sprite: holeSprite,
+      originalTileType: originalTileType, // Use saved value instead of accessing destroyed tile
+      regenerationTimer,
+      isDigging: true
+    };
+    
+    const holeKey = `${gridX},${gridY}`;
+    this.holes.set(holeKey, holeData);
+    
+    // After digging animation completes, set isDigging to false
+    holeSprite.once('animationcomplete', (animation: any) => {
+      if (animation.key && animation.key.includes('hole-dig')) {
+        holeData.isDigging = false;
+      }
+    });
+  }
+
+  private removeFromCollisionGroups(tile: Phaser.GameObjects.Sprite): void {
+    // Remove from solid tiles group
+    if (this.solidTiles.children.entries.includes(tile)) {
+      this.solidTiles.remove(tile);
+    }
+    
+    // Remove from ladder tiles group
+    if (this.ladderTiles.children.entries.includes(tile)) {
+      this.ladderTiles.remove(tile);
+    }
+    
+    // Remove physics body
+    if (tile.body && (tile.body instanceof Phaser.Physics.Arcade.Body || tile.body instanceof Phaser.Physics.Arcade.StaticBody)) {
+      this.physics.world.remove(tile.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody);
+    }
+  }
+
+  private fillHole(gridX: number, gridY: number): void {
+    const holeKey = `${gridX},${gridY}`;
+    const holeData = this.holes.get(holeKey);
+    
+    if (!holeData) {
+      return;
+    }
+    
+    try {
+      holeData.sprite.play('hole-fill');
+      
+      // Set up one-time event listener for animation completion
+      holeData.sprite.once('animationcomplete', (animation: any) => {
+        if (animation.key === 'hole-fill') {
+          this.restoreOriginalTile(holeData, holeKey);
+        }
+      });
+      
+      // Fallback timeout in case animation takes too long or fails
+      this.time.delayedCall(2000, () => {
+        if (this.holes.has(holeKey)) {
+          this.restoreOriginalTile(holeData, holeKey);
+        }
+      });
+      
+    } catch (error) {
+      // Fallback - directly restore tile after short delay
+      this.time.delayedCall(1000, () => {
+        this.restoreOriginalTile(holeData, holeKey);
+      });
+    }
+  }
+  
+  private restoreOriginalTile(holeData: HoleData, holeKey: string): void {
+    // Instead of hiding/showing, recreate the tile completely
+    const pixelX = holeData.gridX * GAME_CONFIG.tileSize + 16;
+    const pixelY = holeData.gridY * GAME_CONFIG.tileSize + 16;
+    
+    // Clean up hole sprite first
+    holeData.sprite.destroy();
+    
+    // Get the original tile frame
+    const frameKey = AssetManager.getTileFrame(holeData.originalTileType);
+    
+    // Create new tile sprite
+    const newTile = this.add.sprite(pixelX, pixelY, 'tiles', frameKey);
+    newTile.setScale(1.6);
+    newTile.setData('tileType', holeData.originalTileType);
+    newTile.setData('gridX', holeData.gridX);
+    newTile.setData('gridY', holeData.gridY);
+    
+    // Update tile reference in levelTiles map
+    const tileKey = `${holeData.gridX},${holeData.gridY}`;
+    this.levelTiles.set(tileKey, newTile);
+    
+    // Add to collision groups
+    this.addTileCollision(newTile, holeData.originalTileType);
+    
+    // Remove hole data
+    this.holes.delete(holeKey);
+  }
+
+  private checkHoleCollisions(): void {
+    const playerGridX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
+    const playerGridY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    
+    // Check if player is near or on any hole for rendering priority
+    let nearHole = false;
+    
+    // Check player's current position and adjacent positions for holes
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const checkKey = `${playerGridX + dx},${playerGridY + dy}`;
+        if (this.holes.has(checkKey)) {
+          nearHole = true;
+          break;
+        }
+      }
+      if (nearHole) break;
+    }
+    
+    // Boost player depth when near holes to ensure proper rendering
+    if (nearHole) {
+      this.player.setDepth(1100); // Extra boost when near holes
+    } else {
+      this.player.setDepth(1000); // Normal depth
+    }
+    
+    // Check if player is standing on a hole
+    const holeKey = `${playerGridX},${playerGridY}`;
+    const hole = this.holes.get(holeKey);
+    
+    if (hole && !hole.isDigging) {
+      // Player is on a hole and not in digging animation - make them fall
+      if (!this.player.getData('onLadder') && !this.player.getData('onRope')) {
+        // Enable gravity to make player fall through the hole
+        if (playerBody.gravity.y === 0) {
+          playerBody.setGravityY(800);
+        }
+        playerBody.moves = true;
+      }
+    }
+    
+    // Also check the tile directly below the player for holes
+    const belowHoleKey = `${playerGridX},${playerGridY + 1}`;
+    const belowHole = this.holes.get(belowHoleKey);
+    
+    if (belowHole && !belowHole.isDigging) {
+      // There's a hole below the player - they should fall through
+      if (!this.player.getData('onLadder') && !this.player.getData('onRope')) {
+        // Check if player is close enough to the hole to fall through
+        const playerBottom = playerBody.y + playerBody.height;
+        const holeTop = belowHole.sprite.y - (belowHole.sprite.displayHeight / 2);
+        
+        if (playerBottom >= holeTop - 5) {
+          // Player is above or in the hole - make them fall
+          if (playerBody.gravity.y === 0) {
+            playerBody.setGravityY(800);
+          }
+          playerBody.moves = true;
+        }
+      }
+    }
   }
 
   private completeLevel(): void {
@@ -823,5 +1105,25 @@ export class GameScene extends Scene {
     ];
     
     this.debugText.setText(debugInfo.join('\n'));
+  }
+
+  destroy(): void {
+    // Clean up all active holes and their timers
+    if (this.holes) {
+      this.holes.forEach((holeData) => {
+        if (holeData.regenerationTimer) {
+          holeData.regenerationTimer.destroy();
+        }
+        if (holeData.sprite) {
+          holeData.sprite.destroy();
+        }
+      });
+      
+      this.holes.clear();
+    }
+    
+    if (this.levelTiles) {
+      this.levelTiles.clear();
+    }
   }
 }

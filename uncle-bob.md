@@ -247,3 +247,14 @@ On the top of the Ladder, I can't move down. Please consider the logic carefully
 >  Now when you're at that position where you were stuck, pressing
 >  the down arrow should allow you to drop down onto the ladder
 >  tile below and start climbing down!  
+
+33. Create hole digging mechanics 
+The hole should be filled after a period of time and turn back into the original brick.
+It has no effect. There is no regeneration. Please think harder to fix this issue.
+
+the time of regeneration is too long
+I think it was 1 second before. Check the reason why it takes so long. Are there any other problems?
+
+When the Player passes through the Hole, there is a black obstruction below Visually.
+
+If there is something else below the Hole, such as a Rope, the Rope becomes invisible, but it is indeed there.
