@@ -62,6 +62,18 @@ async function handleMCPRequest(request) {
     const server = await initializeMCPServer();
     
     switch (request.method) {
+      case 'initialize':
+        return {
+          protocolVersion: '2024-11-05',
+          capabilities: {
+            tools: {}
+          },
+          serverInfo: {
+            name: 'local-playwright-bridge',
+            version: '1.0.0'
+          }
+        };
+        
       case 'tools/list':
         return {
           tools: [
