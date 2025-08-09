@@ -285,3 +285,16 @@ When the level is finished, please load the next level
 I have fixed the level loading issue by myself
 
 35. Solid blocks(@) should use different sprite, and can't be digged 
+
+36. update the progres of the project, and finish all tasks of day 7
+
+Don't update the progress. I haven't passed the test yet. I found that the Guard didn't take any action at all.
+
+When the player enters this level again after being caught, the guard doesn't react.
+
+the live of the player is not decrease after it was caught     
+
+The logic should be:
+1. When the player is caught, the live should be decreased by 1 and the level should restart. But now, it goes back to the main menu. When entering again, the live becomes 3.
+
+2. If the guard passes through the hole completely before the hole is sealed, it doesn't have to die.

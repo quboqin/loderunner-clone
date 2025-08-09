@@ -3,6 +3,7 @@ import { SCENE_KEYS, GAME_CONFIG } from '@/config/GameConfig';
 import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
+import { Guard } from '@/entities/Guard';
 
 export class GameScene extends Scene {
   private gameState!: GameState;
@@ -21,9 +22,11 @@ export class GameScene extends Scene {
   private exitLadderPosition: {x: number, y: number} | null = null;
   private allSPositions: {x: number, y: number}[] = [];
   private exitLadderSprites: Phaser.GameObjects.Sprite[] = [];
-  private levelCompleted: boolean = false;
   private holes!: Map<string, HoleData>;
   private levelTiles!: Map<string, Phaser.GameObjects.Sprite>;
+  private guards: Guard[] = [];
+  private playerInvincible: boolean = false;
+  private invincibilityEndTime: number = 0;
   
   // Debug visuals - simple on/off system
   private debugMode = false;
@@ -42,10 +45,14 @@ export class GameScene extends Scene {
     this.createCollisionGroups();
     this.createLevel();
     this.createPlayer();
+    this.createGuards(); // Create guards after player
     this.createUI();
     this.setupInput();
     this.setupCollisions();
     this.initializeDebug();
+    
+    // Add brief invincibility when level starts (after death)
+    this.addStartupInvincibility();
     
   }
 
@@ -87,13 +94,24 @@ export class GameScene extends Scene {
   }
 
   private initializeGameState(): void {
+    // Preserve lives and current level when restarting, but reset level-specific state
+    const preservedLives = this.gameState?.lives ?? 3;
+    const preservedLevel = this.gameState?.currentLevel ?? 1;
+    const preservedScore = this.gameState?.score ?? 0;
+    
     this.gameState = {
-      currentLevel: this.gameState?.currentLevel ?? 1,
-      score: 0,
-      lives: 3,
-      goldCollected: 0,
+      currentLevel: preservedLevel,
+      score: preservedScore, 
+      lives: preservedLives,
+      goldCollected: 0, // Reset for this level
       totalGold: 0 // Will be set when level loads
     };
+    
+    console.log(`🎮 Game state initialized - Level: ${preservedLevel}, Lives: ${preservedLives}, Score: ${preservedScore}`);
+    
+    // Initialize invincibility state
+    this.playerInvincible = false;
+    this.invincibilityEndTime = 0;
   }
 
   private createLevel(): void {
@@ -138,13 +156,6 @@ export class GameScene extends Scene {
       this.gameState.totalGold++;
     });
     
-    // Create guard starting positions (for later implementation)
-    levelInfo.guards.forEach((guardPos: { x: number; y: number }) => {
-      // Placeholder for guard spawning
-      const guard = this.add.sprite(guardPos.x + 16, guardPos.y + 16, 'guard', 'guard_00');
-      guard.setScale(1.6); // Restore scaling to match other sprites
-      guard.setData('type', 'guard');
-    });
   }
 
   private createTilemap(tiles: number[][]): void {
@@ -233,6 +244,41 @@ export class GameScene extends Scene {
     playerBody.setGravityY(800); // Match the global gravity
     
     
+  }
+
+  private createGuards(): void {
+    // Clear existing guards first (in case of recreation)
+    if (this.guards && this.guards.length > 0) {
+      console.log(`Destroying ${this.guards.length} existing guards before creating new ones`);
+      this.guards.forEach(guard => guard.destroy());
+      this.guards = [];
+    }
+    
+    // Load level data to get guard positions
+    const levelsData = this.cache.json.get('classic-levels');
+    const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
+    console.log(`Loading level: ${levelKey}`);
+    let currentLevelData = levelsData.levels[levelKey];
+    
+    // If level doesn't exist, fallback to level 1
+    if (!currentLevelData) {
+      console.log(`Level ${levelKey} not found, falling back to level-001`);
+      currentLevelData = levelsData.levels['level-001'];
+    }
+    
+    // Parse level data using AssetManager
+    const levelInfo = AssetManager.parseLevelData(currentLevelData);
+    
+    // Create guard AI entities
+    console.log(`Creating ${levelInfo.guards.length} guards for level ${levelKey}`);
+    levelInfo.guards.forEach((guardPos: { x: number; y: number }, index: number) => {
+      console.log(`Creating guard ${index} at position (${guardPos.x + 16}, ${guardPos.y + 16})`);
+      const guard = new Guard(this, guardPos.x + 16, guardPos.y + 16, this.player);
+      guard.setCollisionCallbacks(this.ladderTiles, this.ropeTiles, this.solidTiles);
+      this.guards.push(guard);
+    });
+    
+    console.log(`Total guards created: ${this.guards.length}`);
   }
 
   private setupCollisions(): void {
@@ -355,7 +401,7 @@ export class GameScene extends Scene {
 
   private updateCounter = 0;
 
-  update(): void {
+  update(time: number, delta: number): void {
     try {
       this.updateCounter++;
       
@@ -363,6 +409,8 @@ export class GameScene extends Scene {
       this.handlePlayerMovement();
       this.updateUI();
       this.updatePlayerState();
+      this.updateGuards(time, delta);
+      this.checkGuardPlayerCollisions();
       
       if (this.debugMode) {
         this.updateDebugVisuals();
@@ -761,12 +809,6 @@ export class GameScene extends Scene {
       // Store in level tiles for consistency
       this.levelTiles.set(tileKey, ladder);
       
-      // Check if this is the designated exit ladder
-      const isExitLadder = this.exitLadderPosition && 
-                          position.x === this.exitLadderPosition.x && 
-                          position.y === this.exitLadderPosition.y;
-      
-      
       // Fade in animation with staggered timing
       this.tweens.add({
         targets: ladder,
@@ -964,6 +1006,9 @@ export class GameScene extends Scene {
     if (!holeData) {
       return;
     }
+    
+    // Check if any guards can escape before hole fills
+    this.checkGuardEscapeBeforeHoleFills(holeKey);
     
     try {
       holeData.sprite.play('hole-fill');
@@ -1298,6 +1343,142 @@ export class GameScene extends Scene {
     this.debugText.setText(debugInfo.join('\n'));
   }
 
+  private updateGuards(time: number, delta: number): void {
+    if (this.guards.length > 0 && Math.random() < 0.01) {
+      console.log(`Updating ${this.guards.length} guards`);
+    }
+    this.guards.forEach(guard => {
+      guard.update(time, delta);
+      this.checkGuardHoleCollisions(guard);
+      this.updateGuardClimbableState(guard);
+    });
+  }
+  
+  private checkGuardHoleCollisions(guard: Guard): void {
+    const guardX = Math.floor(guard.sprite.x / 32);
+    const guardY = Math.floor(guard.sprite.y / 32);
+    const holeKey = `${guardX},${guardY}`;
+    
+    // Check if guard is at a hole position
+    if (this.holes.has(holeKey)) {
+      const holeData = this.holes.get(holeKey)!;
+      if (holeData.sprite && holeData.sprite.visible) {
+        
+        // Only trap guard if they are falling into the hole or moving slowly
+        const guardBody = guard.sprite.body as Phaser.Physics.Arcade.Body;
+        const isMovingHorizontally = Math.abs(guardBody.velocity.x) > 50; // Moving fast horizontally
+        const isFalling = guardBody.velocity.y > 0; // Falling down
+        const isOnGround = guardBody.blocked.down || guardBody.touching.down;
+        
+        // Guard gets trapped if:
+        // 1. They're falling into the hole (gravity pulls them down)
+        // 2. They're moving slowly and standing on the hole 
+        // 3. They're not moving fast enough to pass through
+        
+        if (isFalling || (!isMovingHorizontally && isOnGround)) {
+          console.log(`🕳️ Guard trapped in hole: falling=${isFalling}, speed=${Math.abs(guardBody.velocity.x).toFixed(1)}, onGround=${isOnGround}`);
+          guard.fallIntoHole(holeKey);
+        } else {
+          // Guard is passing through - let them continue
+          console.log(`🏃 Guard passing through hole: speed=${Math.abs(guardBody.velocity.x).toFixed(1)}, falling=${isFalling}`);
+        }
+      }
+    }
+  }
+
+  private checkGuardPlayerCollisions(): void {
+    // Check for more robust invincibility system
+    const currentTime = this.time.now;
+    if (this.playerInvincible && currentTime < this.invincibilityEndTime) {
+      return; // Player is invincible
+    } else if (this.playerInvincible && currentTime >= this.invincibilityEndTime) {
+      // End invincibility period
+      this.playerInvincible = false;
+      this.player.setAlpha(1.0);
+      console.log('🛡️ Invincibility period ended');
+    }
+    
+    // Debug: Log collision checking occasionally
+    if (this.guards.length > 0 && Math.random() < 0.01) {
+      console.log(`Checking collisions for ${this.guards.length} guards with player at (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`);
+    }
+    
+    for (const guard of this.guards) {
+      if (guard.checkPlayerCollision(this.player)) {
+        console.log('💀 COLLISION DETECTED! Player caught by guard');
+        this.handlePlayerDeath();
+        break; // Only one collision needed
+      }
+    }
+  }
+
+  private handlePlayerDeath(): void {
+    console.log(`💀 Player death - Lives: ${this.gameState.lives} → ${this.gameState.lives - 1}`);
+    
+    // Handle player death
+    this.gameState.lives -= 1;
+    
+    // Play death sound
+    this.soundManager.playSFX('dead');
+    
+    if (this.gameState.lives <= 0) {
+      console.log('💀 GAME OVER - All lives lost');
+      // Game over - go to menu
+      this.scene.start(SCENE_KEYS.MENU);
+    } else {
+      console.log('💀 Restarting level - Lives remaining: ' + this.gameState.lives);
+      // Restart the level (preserving lives and current level)
+      this.scene.restart();
+    }
+  }
+
+  private addStartupInvincibility(): void {
+    // Give player brief invincibility when level starts
+    // (especially useful after death/restart)
+    this.playerInvincible = true;
+    this.invincibilityEndTime = this.time.now + 2000; // 2 seconds
+    this.player.setAlpha(0.7); // Slight transparency to show invincibility
+    
+    console.log(`🛡️ Startup invincibility activated for 2 seconds`);
+  }
+
+  private checkGuardEscapeBeforeHoleFills(holeKey: string): void {
+    console.log(`🕳️ Checking if guards can escape from hole ${holeKey} before it fills`);
+    
+    // Find guards in this specific hole
+    const guardsInHole = this.guards.filter(guard => guard.getCurrentHole() === holeKey);
+    
+    if (guardsInHole.length > 0) {
+      console.log(`Found ${guardsInHole.length} guard(s) in hole ${holeKey}`);
+      
+      guardsInHole.forEach((guard, index) => {
+        const canEscape = guard.attemptHoleEscape();
+        if (canEscape) {
+          console.log(`🏃 Guard ${index} escaped from hole ${holeKey}!`);
+        } else {
+          console.log(`💀 Guard ${index} trapped in hole ${holeKey} - will respawn`);
+        }
+      });
+    }
+  }
+
+  private updateGuardClimbableState(guard: Guard): void {
+    // Reset climbable flags each frame
+    guard.setClimbableState(false, false);
+    
+    // Check if guard is overlapping with ladders
+    const ladderOverlap = this.physics.overlap(guard.sprite, this.ladderTiles);
+    if (ladderOverlap) {
+      guard.setClimbableState(true, false);
+    }
+    
+    // Check if guard is overlapping with ropes
+    const ropeOverlap = this.physics.overlap(guard.sprite, this.ropeTiles);
+    if (ropeOverlap) {
+      guard.setClimbableState(guard.canClimb(), true);
+    }
+  }
+
   destroy(): void {
     // Clean up all active holes and their timers
     if (this.holes) {
@@ -1311,6 +1492,14 @@ export class GameScene extends Scene {
       });
       
       this.holes.clear();
+    }
+    
+    // Clean up guards
+    if (this.guards) {
+      this.guards.forEach(guard => {
+        guard.destroy();
+      });
+      this.guards = [];
     }
     
     if (this.levelTiles) {
