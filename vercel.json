@@ -19,7 +19,7 @@
       ]
     },
     {
-      "source": "/assets/**/*.json",
+      "source": "/assets/(.*)\\.json",
       "headers": [
         {
           "key": "Content-Type",
@@ -28,7 +28,7 @@
       ]
     },
     {
-      "source": "/assets/**/*.png",
+      "source": "/assets/(.*)\\.png",
       "headers": [
         {
           "key": "Content-Type",
@@ -37,7 +37,7 @@
       ]
     },
     {
-      "source": "/assets/**/*.wav",
+      "source": "/assets/(.*)\\.wav",
       "headers": [
         {
           "key": "Content-Type",
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "source": "/assets/**/*.mp3",
+      "source": "/assets/(.*)\\.mp3",
       "headers": [
         {
           "key": "Content-Type",
