@@ -3,7 +3,7 @@ import { SCENE_KEYS, GAME_CONFIG } from '@/config/GameConfig';
 import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
-import { Guard } from '@/entities/Guard';
+import { Guard, GuardState } from '@/entities/Guard';
 
 export class GameScene extends Scene {
   private gameState!: GameState;
@@ -82,6 +82,15 @@ export class GameScene extends Scene {
   }
 
   private createCollisionGroups(): void {
+    // Set world bounds to prevent entities from escaping game world
+    // Level is 28 tiles wide x 16 tiles high, each tile is 32 pixels
+    // Entity positions use UNSCALED coordinates (sprites are scaled visually only)
+    const levelWidth = 28 * 32; // 896 pixels (unscaled)
+    const levelHeight = 16 * 32; // 512 pixels (unscaled)
+    this.physics.world.setBounds(0, 0, levelWidth, levelHeight);
+    
+    console.log(`🌍 World bounds set: ${levelWidth}x${levelHeight} pixels (unscaled coordinates)`);
+    
     // Create static groups for different tile types
     this.solidTiles = this.physics.add.staticGroup();
     this.ladderTiles = this.physics.add.staticGroup();
@@ -183,6 +192,7 @@ export class GameScene extends Scene {
     });
   }
 
+
   private addTileCollision(tile: Phaser.GameObjects.Sprite, tileType: number): void {
     // Add collision bodies for different tile types
     switch (tileType) {
@@ -278,7 +288,63 @@ export class GameScene extends Scene {
       this.guards.push(guard);
     });
     
+    // Set up guard-to-guard collision detection to prevent overlapping
+    this.setupGuardToGuardCollisions();
+    
     console.log(`Total guards created: ${this.guards.length}`);
+  }
+
+  private setupGuardToGuardCollisions(): void {
+    // Set up collision between each pair of guards to prevent overlapping
+    for (let i = 0; i < this.guards.length; i++) {
+      for (let j = i + 1; j < this.guards.length; j++) {
+        const guardA = this.guards[i];
+        const guardB = this.guards[j];
+        
+        // Add collision between the two guards
+        this.physics.add.collider(guardA.sprite, guardB.sprite, () => {
+          // When guards collide, make them bounce slightly and change direction
+          this.handleGuardToGuardCollision(guardA, guardB);
+        });
+      }
+    }
+    
+    console.log(`Set up ${this.guards.length * (this.guards.length - 1) / 2} guard-to-guard collision pairs`);
+  }
+
+  private handleGuardToGuardCollision(guardA: Guard, guardB: Guard): void {
+    // Prevent guards from getting stuck by making them change direction when they collide
+    const guardAState = guardA.getState();
+    const guardBState = guardB.getState();
+    
+    // Only handle collision if both guards are in moveable states
+    if (guardAState !== GuardState.IN_HOLE && guardAState !== GuardState.REBORN &&
+        guardBState !== GuardState.IN_HOLE && guardBState !== GuardState.REBORN) {
+      
+      // Calculate positions to determine who should go which way
+      const guardAX = guardA.sprite.x;
+      const guardBX = guardB.sprite.x;
+      
+      // Make the leftmost guard go left, rightmost guard go right
+      if (guardAX < guardBX) {
+        // Guard A is on the left, make it go left; Guard B go right
+        this.bounceGuard(guardA, -1); // Go left
+        this.bounceGuard(guardB, 1);  // Go right
+      } else {
+        // Guard B is on the left, make it go left; Guard A go right  
+        this.bounceGuard(guardB, -1); // Go left
+        this.bounceGuard(guardA, 1);  // Go right
+      }
+    }
+  }
+
+  private bounceGuard(guard: Guard, direction: number): void {
+    // Give guard a small velocity push in the specified direction
+    const body = guard.sprite.body as Phaser.Physics.Arcade.Body;
+    body.setVelocityX(direction * 50); // Small bounce velocity
+    
+    // Force the guard to change direction using the public method
+    guard.forceDirection(direction);
   }
 
   private setupCollisions(): void {
@@ -886,6 +952,8 @@ export class GameScene extends Scene {
       return false;
     }
     
+    // Allow digging holes on bottom row - we'll handle the floor collision separately
+    
     // Check if there's already a hole here
     const holeKey = `${gridX},${gridY}`;
     if (this.holes.has(holeKey)) {
@@ -1344,9 +1412,6 @@ export class GameScene extends Scene {
   }
 
   private updateGuards(time: number, delta: number): void {
-    if (this.guards.length > 0 && Math.random() < 0.01) {
-      console.log(`Updating ${this.guards.length} guards`);
-    }
     this.guards.forEach(guard => {
       guard.update(time, delta);
       this.checkGuardHoleCollisions(guard);
@@ -1370,18 +1435,19 @@ export class GameScene extends Scene {
         const isFalling = guardBody.velocity.y > 0; // Falling down
         const isOnGround = guardBody.blocked.down || guardBody.touching.down;
         
-        // Guard gets trapped if:
-        // 1. They're falling into the hole (gravity pulls them down)
-        // 2. They're moving slowly and standing on the hole 
-        // 3. They're not moving fast enough to pass through
+        // Guards should be aggressive and chase player even through holes
+        // Only trap if they're really falling in (not actively chasing)
+        const isActivelyChasing = Math.abs(guardBody.velocity.x) > 30; // Moving with purpose
+        const isSlowlyFalling = isFalling && Math.abs(guardBody.velocity.y) < 100; // Slow fall, not fast drop
         
-        if (isFalling || (!isMovingHorizontally && isOnGround)) {
-          console.log(`🕳️ Guard trapped in hole: falling=${isFalling}, speed=${Math.abs(guardBody.velocity.x).toFixed(1)}, onGround=${isOnGround}`);
+        if (!isActivelyChasing && (isSlowlyFalling || (isOnGround && !isMovingHorizontally))) {
+          // Special handling for bottom-layer holes - shorter trap time
+          if (holeData.gridY >= 15) {
+            console.log(`🕳️ Guard trapped in BOTTOM hole - will respawn quickly`);
+          }
           guard.fallIntoHole(holeKey);
-        } else {
-          // Guard is passing through - let them continue
-          console.log(`🏃 Guard passing through hole: speed=${Math.abs(guardBody.velocity.x).toFixed(1)}, falling=${isFalling}`);
         }
+        // Guard is actively chasing - let them pass through or jump over
       }
     }
   }
@@ -1395,17 +1461,10 @@ export class GameScene extends Scene {
       // End invincibility period
       this.playerInvincible = false;
       this.player.setAlpha(1.0);
-      console.log('🛡️ Invincibility period ended');
-    }
-    
-    // Debug: Log collision checking occasionally
-    if (this.guards.length > 0 && Math.random() < 0.01) {
-      console.log(`Checking collisions for ${this.guards.length} guards with player at (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`);
     }
     
     for (const guard of this.guards) {
       if (guard.checkPlayerCollision(this.player)) {
-        console.log('💀 COLLISION DETECTED! Player caught by guard');
         this.handlePlayerDeath();
         break; // Only one collision needed
       }

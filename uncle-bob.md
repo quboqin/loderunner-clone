@@ -298,3 +298,34 @@ The logic should be:
 1. When the player is caught, the live should be decreased by 1 and the level should restart. But now, it goes back to the main menu. When entering again, the live becomes 3.
 
 2. If the guard passes through the hole completely before the hole is sealed, it doesn't have to die.
+
+3. The guard should either dash through the ladder or go up and down the ladder. Now I find that the guard gets stuck on the ladder. It seems that the guard can't use the rope either.
+
+This time, it's not about removing the debug console. The problem still hasn't been solved. The guard can't get past the ladder when it encounters it.
+
+The problem still hasn't been solved. Think harder.
+
+Now the guard can pass through the ladder, but when coming down from the ladder, it doesn't seem to climb down, but rather fall down.
+
+There is also too much and too rapid console log output, and I can't provide useful information.
+
+When the Player digs a Hole, the Guard should still chase in the direction of the Player. And I found that even after the Hole disappears, the Guard doesn't chase, as if it can't pass through the original disappearing position.
+
+When both the Guard and the Player can fall out of the game from the Hole (the bottom layer), this is incorrect. They should not be able to fall out of the game on this bottom layer.
+
+There is a problem with the last modification. It should still be possible to dig holes on the bottommost layer, and one can also fall into the holes. However, it is not allowed to jump out to the area below the bottommost layer. The area below the bottommost layer should be regarded as an obstacle. 
+
+It's a logical problem. I can't enter the game and can't start the game.
+
+The problem hasn't been solved, and the Guard can still fall out of the game from the right side.
+
+If there is enough time, the Guard can climb out before the Hole disappears.
+If there is not enough time, the Guard will be killed, but will respawn at his initial position.
+
+When the Guard climbs the ladder, the x - position should snap to the middle of the ladder, otherwise it won't be able to climb up.
+
+The Player can step on the Guard's head to pass through. As long as they are not on the same horizontal plane, it is not considered being caught.
+
+If the Guard and the Player are not on the same horizontal plane (possibly below the Player), they will not look for a ladder to climb up. There might be a problem with the AI's logic here.
+
+The positions of the Guards should not overlap.
