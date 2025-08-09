@@ -6,6 +6,19 @@
   "framework": "vite",
   "headers": [
     {
+      "source": "/assets/(.*)\\.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -17,24 +30,11 @@
           "value": "cross-origin"
         }
       ]
-    },
-    {
-      "source": "/assets/(.*)\\.json",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/).*)",
+      "source": "/((?!api)(?!assets).*)",
       "destination": "/index.html"
     }
   ]
