@@ -329,3 +329,5 @@ The Player can step on the Guard's head to pass through. As long as they are not
 If the Guard and the Player are not on the same horizontal plane (possibly below the Player), they will not look for a ladder to climb up. There might be a problem with the AI's logic here.
 
 The positions of the Guards should not overlap.
+
+37. As a vercel-deployment-specialist, please refer to ../vercel. This is the worktree of the vercel-deploy branch of this project before, and it was successfully deployed on Vercel at that time.

@@ -58,7 +58,7 @@ export class PreloadScene extends Scene {
     AssetManager.loadIBMAssets(this);
     
     // Load level data
-    this.load.json('classic-levels', './assets/levels/classic.json');
+    this.load.json('classic-levels', '/assets/levels/classic.json');
   }
 
   private onLoadComplete(): void {
