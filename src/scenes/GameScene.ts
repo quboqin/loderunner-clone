@@ -88,7 +88,7 @@ export class GameScene extends Scene {
 
   private initializeGameState(): void {
     this.gameState = {
-      currentLevel: 1,
+      currentLevel: this.gameState?.currentLevel ?? 1,
       score: 0,
       lives: 3,
       goldCollected: 0,
@@ -102,6 +102,7 @@ export class GameScene extends Scene {
     // Load level data from classic levels
     const levelsData = this.cache.json.get('classic-levels');
     const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
+    console.log(`levelKey = ${levelKey}`)
     let currentLevelData = levelsData.levels[levelKey];
     
     // If level doesn't exist, fallback to level 1
