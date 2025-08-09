@@ -12,10 +12,16 @@ export class GameScene extends Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private livesText!: Phaser.GameObjects.Text;
+  private goldText!: Phaser.GameObjects.Text;
   private soundManager!: SoundManager;
   private solidTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ladderTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ropeTiles!: Phaser.Physics.Arcade.StaticGroup;
+  private goldSprites!: Phaser.Physics.Arcade.StaticGroup;
+  private exitLadderPosition: {x: number, y: number} | null = null;
+  private allSPositions: {x: number, y: number}[] = [];
+  private exitLadderSprites: Phaser.GameObjects.Sprite[] = [];
+  private levelCompleted: boolean = false;
   private holes!: Map<string, HoleData>;
   private levelTiles!: Map<string, Phaser.GameObjects.Sprite>;
   
@@ -73,6 +79,7 @@ export class GameScene extends Scene {
     this.solidTiles = this.physics.add.staticGroup();
     this.ladderTiles = this.physics.add.staticGroup();
     this.ropeTiles = this.physics.add.staticGroup();
+    this.goldSprites = this.physics.add.staticGroup();
     
     // Initialize hole management system
     this.holes = new Map<string, HoleData>();
@@ -94,10 +101,21 @@ export class GameScene extends Scene {
     
     // Load level data from classic levels
     const levelsData = this.cache.json.get('classic-levels');
-    const level1Data = levelsData.levels['level-001'];
+    const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
+    let currentLevelData = levelsData.levels[levelKey];
+    
+    // If level doesn't exist, fallback to level 1
+    if (!currentLevelData) {
+      this.gameState.currentLevel = 1;
+      currentLevelData = levelsData.levels['level-001'];
+    }
     
     // Parse level data using AssetManager
-    const levelInfo = AssetManager.parseLevelData(level1Data);
+    const levelInfo = AssetManager.parseLevelData(currentLevelData);
+    
+    // Store exit ladder position and all S positions
+    this.exitLadderPosition = levelInfo.exitLadder;
+    this.allSPositions = levelInfo.allSPositions;
     
     // Create tilemap from parsed data
     this.createTilemap(levelInfo.tiles);
@@ -110,12 +128,11 @@ export class GameScene extends Scene {
       const gold = this.add.sprite(goldPos.x + 16, goldPos.y + 16, 'tiles', 'gold');
       gold.setScale(1.6); // Keep scaling for gold to match tile size
       gold.setData('type', 'gold');
-      gold.setInteractive();
+      gold.setDepth(200); // Ensure gold renders above background elements
       
-      // Add collision detection for gold collection
-      gold.on('pointerdown', () => {
-        this.collectGold(gold);
-      });
+      // Add physics body for collision detection
+      this.physics.add.existing(gold, true); // true = static body
+      this.goldSprites.add(gold);
       
       this.gameState.totalGold++;
     });
@@ -179,9 +196,6 @@ export class GameScene extends Scene {
         tile.setDepth(100); // Higher depth to render above holes
         break;
         
-      case 6: // Exit/trap - special handling later
-        // No collision for now
-        break;
     }
   }
 
@@ -261,6 +275,11 @@ export class GameScene extends Scene {
       return true; // Normal collision for non-ladder tiles
     }, this);
     
+    // Player collision with gold - automatic collection
+    this.physics.add.overlap(this.player, this.goldSprites, (_player: any, gold: any) => {
+      this.collectGold(gold as Phaser.GameObjects.Sprite);
+    }, undefined, this);
+    
     // Note: Ladder and rope detection now handled by position-based continuous detection
     // in updateClimbableState() method - no overlap handlers needed
   }
@@ -286,7 +305,7 @@ export class GameScene extends Scene {
       fontFamily: 'Arial, sans-serif'
     });
 
-    this.add.text(GAME_CONFIG.width - padding, padding, 
+    this.goldText = this.add.text(GAME_CONFIG.width - padding, padding, 
       `GOLD: ${this.gameState.goldCollected}/${this.gameState.totalGold}`, {
       fontSize: '24px',
       color: '#FFD700',
@@ -361,6 +380,9 @@ export class GameScene extends Scene {
     
     // Check for holes player might fall through
     this.checkHoleCollisions();
+    
+    // Check for exit ladder completion
+    this.checkExitLadderCompletion();
   }
 
   private updateClimbableState(): void {
@@ -513,6 +535,7 @@ export class GameScene extends Scene {
     this.scoreText.setText(`SCORE: ${this.gameState.score}`);
     this.levelText.setText(`LEVEL: ${this.gameState.currentLevel}`);
     this.livesText.setText(`LIVES: ${this.gameState.lives}`);
+    this.goldText.setText(`GOLD: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
   }
 
   private handlePlayerMovement(): void {
@@ -658,13 +681,123 @@ export class GameScene extends Scene {
     this.gameState.goldCollected++;
     this.gameState.score += 100;
     
-    // Remove gold sprite
-    goldSprite.destroy();
+    // Remove gold from collision group first to prevent multiple collections
+    this.goldSprites.remove(goldSprite);
     
-    // Check if level is complete
+    // Add collection animation - scale up and fade out
+    this.tweens.add({
+      targets: goldSprite,
+      scaleX: goldSprite.scaleX * 1.5,
+      scaleY: goldSprite.scaleY * 1.5,
+      alpha: 0,
+      duration: 200,
+      ease: 'Power2',
+      onComplete: () => {
+        goldSprite.destroy();
+      }
+    });
+    
+    // Show score popup
+    const scoreText = this.add.text(goldSprite.x, goldSprite.y - 20, '+100', {
+      fontSize: '18px',
+      color: '#FFD700',
+      fontFamily: 'Arial, sans-serif'
+    }).setOrigin(0.5, 0.5).setDepth(300);
+    
+    // Animate score popup
+    this.tweens.add({
+      targets: scoreText,
+      y: scoreText.y - 30,
+      alpha: 0,
+      duration: 800,
+      ease: 'Power2',
+      onComplete: () => {
+        scoreText.destroy();
+      }
+    });
+    
+    // Check if all gold is collected
     if (this.gameState.goldCollected >= this.gameState.totalGold) {
-      this.completeLevel();
+      this.revealExitLadder();
     }
+  }
+
+  private revealExitLadder(): void {
+    if (this.allSPositions.length === 0) {
+      return; // No S ladders in this level
+    }
+
+    // Create ladder sprites for all S positions
+    this.allSPositions.forEach((position, index) => {
+      const ladder = this.add.sprite(
+        position.x + 16, 
+        position.y + 16, 
+        'tiles', 
+        'ladder'
+      );
+      ladder.setScale(1.6);
+      ladder.setDepth(100);
+      ladder.setAlpha(0); // Start invisible
+      
+      // Calculate grid coordinates first
+      const gridX = position.x / 32;
+      const gridY = position.y / 32;
+      const tileKey = `${gridX},${gridY}`;
+      
+      // Set tile data so collision detection recognizes this as a ladder
+      ladder.setData('tileType', 3); // Type 3 = ladder
+      ladder.setData('gridX', gridX);
+      ladder.setData('gridY', gridY);
+      
+      // Add physics for ladder collision detection (same as regular ladders)
+      this.physics.add.existing(ladder, true);
+      this.ladderTiles.add(ladder);
+      this.solidTiles.add(ladder); // Needed for platform-style collision from above
+      
+      // Store reference to the created sprites
+      this.exitLadderSprites.push(ladder);
+      
+      // Store in level tiles for consistency
+      this.levelTiles.set(tileKey, ladder);
+      
+      // Check if this is the designated exit ladder
+      const isExitLadder = this.exitLadderPosition && 
+                          position.x === this.exitLadderPosition.x && 
+                          position.y === this.exitLadderPosition.y;
+      
+      
+      // Fade in animation with staggered timing
+      this.tweens.add({
+        targets: ladder,
+        alpha: 1,
+        duration: 1000,
+        delay: index * 200, // Stagger the animations
+        ease: 'Power2'
+      });
+    });
+
+    // Play special sound effect
+    this.soundManager.playSFX('pass'); // Using existing 'pass' sound
+    
+    // Show message
+    const message = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY - 100, 
+      'EXIT LADDER REVEALED!', {
+      fontSize: '32px',
+      color: '#FFD700',
+      fontFamily: 'Arial, sans-serif'
+    }).setOrigin(0.5, 0.5).setDepth(400);
+    
+    // Animate message
+    this.tweens.add({
+      targets: message,
+      y: message.y - 50,
+      alpha: 0,
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => {
+        message.destroy();
+      }
+    });
   }
 
   private digHole(direction: 'left' | 'right'): void {
@@ -948,6 +1081,48 @@ export class GameScene extends Scene {
     }
   }
 
+  private checkExitLadderCompletion(): void {
+    // Debug logging
+    if (this.gameState.goldCollected >= this.gameState.totalGold) {
+      console.log(`🚪 COMPLETION CHECK: ExitSprites: ${this.exitLadderSprites.length}, FirstVisible: ${this.exitLadderSprites[0]?.visible}, GoldCollected: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
+    }
+    
+    // Only check if exit ladder sprites exist and are visible (all gold collected)
+    if (this.exitLadderSprites.length === 0 || !this.exitLadderSprites[0].visible) {
+      return;
+    }
+
+    // Only check completion for the designated exit ladder position
+    if (!this.exitLadderPosition) {
+      return;
+    }
+
+    // Check if player is at the top of the designated exit ladder
+    const playerCenterX = this.player.x;
+    const playerCenterY = this.player.y;
+    const playerTileX = Math.floor(playerCenterX / GAME_CONFIG.tileSize);
+    const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
+    
+    // Get exit ladder position
+    const exitLadderTileX = this.exitLadderPosition.x / GAME_CONFIG.tileSize;
+    const exitLadderTileY = this.exitLadderPosition.y / GAME_CONFIG.tileSize;
+    
+    // Check if player is on the exit ladder tile
+    if (playerTileX === exitLadderTileX && playerTileY === exitLadderTileY) {
+      // Check if player is at the top of the ladder (within the upper portion of the tile)
+      const ladderPixelY = exitLadderTileY * GAME_CONFIG.tileSize;
+      const ladderTopThreshold = ladderPixelY + (GAME_CONFIG.tileSize * 0.8); // Top 80% of ladder tile (more lenient)
+      
+      console.log(`🚪 COMPLETION CHECK: On exit ladder! PlayerY: ${playerCenterY}, Threshold: ${ladderTopThreshold}`);
+      
+      if (playerCenterY <= ladderTopThreshold) {
+        console.log('🎉 COMPLETING LEVEL!');
+        // Player reached the top of the exit ladder - complete level!
+        this.completeLevel();
+      }
+    }
+  }
+
   private completeLevel(): void {
     // Play level completion music
     this.soundManager.playLevelComplete();
@@ -959,7 +1134,7 @@ export class GameScene extends Scene {
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
     
-    const completeText = this.add.text(centerX, centerY, 'LEVEL COMPLETE!', {
+    const completeText = this.add.text(centerX, centerY, `LEVEL ${this.gameState.currentLevel} COMPLETE!`, {
       fontSize: '48px',
       color: '#ffff00',
       fontFamily: 'Arial, sans-serif',
@@ -970,9 +1145,23 @@ export class GameScene extends Scene {
     // Transition to next level or game complete after delay
     this.time.delayedCall(3000, () => {
       completeText.destroy();
-      // For now, restart the same level
-      this.scene.restart();
+      this.loadNextLevel();
     });
+  }
+
+  private loadNextLevel(): void {
+    // Increment current level
+    this.gameState.currentLevel++;
+    
+    // Check if next level exists (assuming levels go up to 150 based on classic.json)
+    const maxLevels = 150;
+    if (this.gameState.currentLevel > maxLevels) {
+      // Game completed - could show victory screen or restart from level 1
+      this.gameState.currentLevel = 1;
+    }
+    
+    // Restart scene with new level
+    this.scene.restart();
   }
 
   private toggleDebugMode(): void {

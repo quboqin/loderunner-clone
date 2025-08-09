@@ -258,3 +258,26 @@ I think it was 1 second before. Check the reason why it takes so long. Are there
 When the Player passes through the Hole, there is a black obstruction below Visually.
 
 If there is something else below the Hole, such as a Rope, the Rope becomes invisible, but it is indeed there.
+
+## Day 5
+34. gold collection
+The rule is 
+1. hide the exit ladder first
+2. after finishing collecting all gold, then show the exit ladder
+3. when the play arrives at the top of the exit ladder, the player archive the level successfully
+
+In the map(classic.json), the 'S' stands for the exit ladder, please hide the exit ladder first
+
+You have detected the exit ladder, but don't show the exit ladder the the level starts 
+
+The problem still hasn't been solved. The exit ladder can be seen after the game is initialized. Please think more deeply.
+
+The hidden exit ladders are behaviorally equivalent to empty tiles and are equivalent to ladders when they appear.
+
+When the exit ladder appears, I think you regard it as an obstacle. I can't pass through this ladder, let alone climb up it.
+
+When i arrived at the top of the exit ladder, the level does not finish
+
+When the exit ladder appears, the topmost exit ladder is flashing
+
+When the level is finished, please load the next level

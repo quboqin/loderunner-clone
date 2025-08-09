@@ -195,43 +195,84 @@ export class AssetManager {
   }
 
   // Parse classic.json level data format
-  static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, guards: {x: number, y: number}[], gold: {x: number, y: number}[] } {
+  static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, guards: {x: number, y: number}[], gold: {x: number, y: number}[], exitLadder: {x: number, y: number} | null, allSPositions: {x: number, y: number}[] } {
     const tiles: number[][] = [];
     const guards: {x: number, y: number}[] = [];
     const gold: {x: number, y: number}[] = [];
     let playerStart = { x: 0, y: 0 };
+    let exitLadder: {x: number, y: number} | null = null;
+    const allSPositions: {x: number, y: number}[] = [];
+
+    // First pass: find the exit ladder position (topmost 'S' in the rightmost column that has 'S')
+    let exitLadderX = -1;
+    let exitLadderY = -1;
+    
+    // Find rightmost column with 'S' characters
+    let rightmostSColumn = -1;
+    for (let x = levelArray[0].length - 1; x >= 0; x--) {
+      let hasS = false;
+      for (let y = 0; y < levelArray.length; y++) {
+        if (levelArray[y][x] === 'S') {
+          hasS = true;
+          break;
+        }
+      }
+      if (hasS) {
+        rightmostSColumn = x;
+        break;
+      }
+    }
+    
+    // Find topmost 'S' in that column to be the exit ladder
+    if (rightmostSColumn !== -1) {
+      for (let y = 0; y < levelArray.length; y++) {
+        if (levelArray[y][rightmostSColumn] === 'S') {
+          exitLadderX = rightmostSColumn;
+          exitLadderY = y;
+          exitLadder = { x: exitLadderX * 32, y: exitLadderY * 32 }; // Convert to pixel coordinates
+          break; // First (topmost) S in rightmost column
+        }
+      }
+    }
 
     levelArray.forEach((line, y) => {
       const row: number[] = [];
       for (let x = 0; x < line.length; x++) {
         const char = line[x];
-        switch (char) {
-          case ' ': row.push(0); break; // Empty
-          case '#': row.push(1); break; // Brick
-          case 'S': row.push(2); break; // Solid
-          case 'H': row.push(3); break; // Ladder
-          case '-': row.push(4); break; // Rope
-          case '$': 
-            row.push(0); // Empty space with gold
-            gold.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
-            break;
-          case '&': 
-            row.push(0); // Empty space
-            playerStart = { x: x * 32, y: y * 32 }; // Convert to pixel coordinates
-            break;
-          case '0': 
-            row.push(0); // Empty space with guard
-            guards.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
-            break;
-          case '@': row.push(5); break; // Special brick (can be dug)
-          case 'X': row.push(6); break; // Exit
-          default: row.push(0); // Default to empty
+        
+        // Check if this 'S' should be the exit ladder
+        if (char === 'S') {
+          // Collect all S positions
+          allSPositions.push({ x: x * 32, y: y * 32 });
+          
+          row.push(0); // ALL S characters hidden initially
+        } else {
+          switch (char) {
+            case ' ': row.push(0); break; // Empty
+            case '#': row.push(1); break; // Brick
+            case 'H': row.push(3); break; // Ladder
+            case '-': row.push(4); break; // Rope
+            case '$': 
+              row.push(0); // Empty space with gold
+              gold.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+              break;
+            case '&': 
+              row.push(0); // Empty space
+              playerStart = { x: x * 32, y: y * 32 }; // Convert to pixel coordinates
+              break;
+            case '0': 
+              row.push(0); // Empty space with guard
+              guards.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+              break;
+            case '@': row.push(5); break; // Special brick (can be dug)
+            default: row.push(0); // Default to empty
+          }
         }
       }
       tiles.push(row);
     });
 
-    return { tiles, playerStart, guards, gold };
+    return { tiles, playerStart, guards, gold, exitLadder, allSPositions };
   }
 
   // Get tile sprite frame name from tile type
@@ -243,7 +284,7 @@ export class AssetManager {
       case 3: return 'ladder';
       case 4: return 'rope';
       case 5: return 'brick'; // Special brick
-      case 6: return 'trap'; // Exit/trap
+      case 6: return 'ladder'; // Exit ladder (looks like ladder but hidden initially)
       default: return 'empty';
     }
   }
