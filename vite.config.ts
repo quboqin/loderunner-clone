@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-  base: '/',
+  base: './',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -20,13 +20,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           phaser: ['phaser']
-        },
-        assetFileNames: (assetInfo) => {
-          // Preserve the original directory structure for assets
-          if (assetInfo.name && assetInfo.name.endsWith('.json')) {
-            return 'assets/[name][extname]';
-          }
-          return 'assets/[name]-[hash][extname]';
         }
       }
     }
