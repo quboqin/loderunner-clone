@@ -283,7 +283,7 @@ export class AssetManager {
       case 2: return 'solid';
       case 3: return 'ladder';
       case 4: return 'rope';
-      case 5: return 'brick'; // Special brick
+      case 5: return 'solid'; // Solid block (@) - cannot be dug
       case 6: return 'ladder'; // Exit ladder (looks like ladder but hidden initially)
       default: return 'empty';
     }

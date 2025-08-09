@@ -175,9 +175,9 @@ export class GameScene extends Scene {
   private addTileCollision(tile: Phaser.GameObjects.Sprite, tileType: number): void {
     // Add collision bodies for different tile types
     switch (tileType) {
-      case 1: // Brick - solid collision
-      case 2: // Solid - solid collision  
-      case 5: // Special brick - solid collision
+      case 1: // Brick - solid collision, can be dug
+      case 2: // Solid - solid collision, cannot be dug
+      case 5: // Solid block (@) - solid collision, cannot be dug
         this.physics.add.existing(tile, true); // true = static body
         this.solidTiles.add(tile);
         tile.setDepth(10); // Standard tile depth
@@ -288,30 +288,30 @@ export class GameScene extends Scene {
   private createUI(): void {
     const padding = 20;
     
-    this.scoreText = this.add.text(padding, padding, `SCORE: ${this.gameState.score}`, {
+    this.scoreText = this.add.text(padding, GAME_CONFIG.height - padding - 90, `SCORE: ${this.gameState.score}`, {
       fontSize: '24px',
-      color: '#ffffff',
+      color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
-    });
+    }).setDepth(2000);
 
-    this.levelText = this.add.text(padding, padding + 30, `LEVEL: ${this.gameState.currentLevel}`, {
+    this.levelText = this.add.text(padding, GAME_CONFIG.height - padding - 60, `LEVEL: ${this.gameState.currentLevel}`, {
       fontSize: '24px',
-      color: '#ffffff',
+      color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
-    });
+    }).setDepth(2000);
 
-    this.livesText = this.add.text(padding, padding + 60, `LIVES: ${this.gameState.lives}`, {
+    this.livesText = this.add.text(padding, GAME_CONFIG.height - padding - 30, `LIVES: ${this.gameState.lives}`, {
       fontSize: '24px',
-      color: '#ffffff',
+      color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
-    });
+    }).setDepth(2000);
 
     this.goldText = this.add.text(GAME_CONFIG.width - padding, padding, 
       `GOLD: ${this.gameState.goldCollected}/${this.gameState.totalGold}`, {
       fontSize: '24px',
       color: '#FFD700',
       fontFamily: 'Arial, sans-serif'
-    }).setOrigin(1, 0);
+    }).setOrigin(1, 0).setDepth(2000);
 
     this.add.text(GAME_CONFIG.width - padding, GAME_CONFIG.height - padding - 60, 
       'ESC - Menu', {
@@ -861,6 +861,7 @@ export class GameScene extends Scene {
     const tileType = tile.getData('tileType');
     
     // Only brick tiles (type 1) can be dug
+    // Solid blocks (type 2 and type 5) cannot be dug
     return tileType === 1;
   }
 

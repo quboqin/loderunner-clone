@@ -281,3 +281,7 @@ When i arrived at the top of the exit ladder, the level does not finish
 When the exit ladder appears, the topmost exit ladder is flashing
 
 When the level is finished, please load the next level
+
+I have fixed the level loading issue by myself
+
+35. Solid blocks(@) should use different sprite, and can't be digged 
