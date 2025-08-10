@@ -1,3 +1,5 @@
+import { BaseEntity, EntityConfig, EntityType, PhysicsConfig } from './BaseEntity';
+import { LogCategory } from '@/utils/Logger';
 
 export enum GuardState {
   IDLE = 'idle',
@@ -13,17 +15,13 @@ export enum GuardState {
   SHAKING = 'shaking'
 }
 
-export class Guard {
-  public sprite: Phaser.Physics.Arcade.Sprite;
-  private scene: Phaser.Scene;
-  private state: GuardState = GuardState.IDLE;
+export class Guard extends BaseEntity {
+  protected state: GuardState = GuardState.IDLE;
   private targetPlayer: Phaser.GameObjects.Sprite;
   private lastDirection: number = 1; // 1 for right, -1 for left
   private speed: number = 80;
   
-  // Spawn position for respawning
-  private spawnX: number;
-  private spawnY: number;
+  // Guard-specific properties (spawn position now handled by BaseEntity)
   
   // AI decision timing
   private decisionTimer: number = 0;
@@ -42,38 +40,44 @@ export class Guard {
   private onRope: boolean = false;
   
   constructor(scene: Phaser.Scene, x: number, y: number, targetPlayer: Phaser.GameObjects.Sprite) {
-    this.scene = scene;
+    const config: EntityConfig = {
+      scene,
+      x,
+      y,
+      texture: 'guard',
+      frame: 'guard_00',
+      scale: 1.6,
+      depth: 1000
+    };
+    
+    super(config, EntityType.GUARD, LogCategory.GUARD_AI);
+    
     this.targetPlayer = targetPlayer;
-    
-    // Store spawn position for respawning after being killed in holes
-    this.spawnX = x;
-    this.spawnY = y;
-    
-    // Create physics sprite
-    this.sprite = scene.physics.add.sprite(x, y, 'guard', 'guard_00');
-    this.sprite.setScale(1.6);
-    this.sprite.setDepth(1000); // Same depth as player for proper layering
-    
-    // Set up physics body
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    body.setSize(16, 28); // Similar to player collision size
-    body.setOffset(2, -6); // Adjust offset for proper alignment
-    body.setCollideWorldBounds(true);
-    body.setGravityY(600); // Same gravity as player
-    
-    // Set bounce to prevent sticking to walls
-    body.setBounce(0.1);
-    
     this.setState(GuardState.IDLE);
   }
   
-  update(_time: number, delta: number): void {
+  protected initializeEntity(): void {
+    // Set up Guard-specific physics
+    const physicsConfig: PhysicsConfig = {
+      width: 16,
+      height: 28,
+      offsetX: 2,
+      offsetY: -6,
+      gravityY: 600,
+      bounce: 0.1,
+      collideWorldBounds: true
+    };
+    
+    this.initializePhysics(physicsConfig);
+  }
+  
+  public update(_time: number, delta: number): void {
     this.decisionTimer += delta;
     this.pathfindingCooldown -= delta;
     
     // Debug: Check if guard is near world boundaries (only log when actually at boundary)
     if (this.sprite.x > 890 || this.sprite.x < 10 || this.sprite.y > 500 || this.sprite.y < 10) {
-      console.log(`🚧 Guard at boundary: pos(${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`);
+      this.logger.debug(`Guard at boundary: pos(${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`);
     }
     
     // Handle hole mechanics
@@ -132,20 +136,20 @@ export class Guard {
     if (Math.abs(deltaY) > 45) { // Reduced from 60 to be more aggressive
       // Player is on a very different level - prioritize vertical movement
       if (this.canClimb()) {
-        console.log(`🧗 Guard climbing toward player: deltaY=${deltaY.toFixed(0)}, deltaX=${deltaX.toFixed(0)}`);
+        this.logger.debug(`Guard climbing toward player: deltaY=${deltaY.toFixed(0)}, deltaX=${deltaX.toFixed(0)}`);
         this.setState(GuardState.CLIMBING);
         return;
       }
       
       if (this.canUseRope()) {
-        console.log(`🪢 Guard using rope toward player: deltaY=${deltaY.toFixed(0)}, deltaX=${deltaX.toFixed(0)}`);
+        this.logger.debug(`Guard using rope toward player: deltaY=${deltaY.toFixed(0)}, deltaX=${deltaX.toFixed(0)}`);
         this.setState(deltaX > 0 ? GuardState.BAR_RIGHT : GuardState.BAR_LEFT);
         this.lastDirection = deltaX > 0 ? 1 : -1;
         return;
       }
       
       // Player is on different level but no ladder/rope available - move to find one
-      console.log(`🔍 Player on different level (deltaY=${deltaY.toFixed(0)}) but guard not on ladder/rope - seeking`);
+      this.logger.debug(`Player on different level (deltaY=${deltaY.toFixed(0)}) but guard not on ladder/rope - seeking`);
       
       // Actively seek ladders/ropes by moving horizontally
       // If player is significantly to the left/right, move toward them to find connections
@@ -154,23 +158,23 @@ export class Guard {
         const seekBlocked = deltaX > 0 ? body.blocked.right : body.blocked.left;
         
         if (!seekBlocked) {
-          console.log(`🏃 Guard seeking ladder - moving ${deltaX > 0 ? 'right' : 'left'} toward player`);
+          this.logger.debug(`Guard seeking ladder - moving ${deltaX > 0 ? 'right' : 'left'} toward player`);
           this.setState(seekDirection);
           this.lastDirection = deltaX > 0 ? 1 : -1;
           return;
         } else {
-          console.log(`🚧 Guard blocked while seeking ladder - trying alternate direction`);
+          this.logger.debug('Guard blocked while seeking ladder - trying alternate direction');
         }
       }
       
       // If can't move toward player, try moving in either direction to find ladders
       if (!body.blocked.left && Math.random() > 0.5) {
-        console.log(`🔀 Guard exploring left to find ladders`);
+        this.logger.debug('Guard exploring left to find ladders');
         this.setState(GuardState.RUNNING_LEFT);
         this.lastDirection = -1;
         return;
       } else if (!body.blocked.right) {
-        console.log(`🔀 Guard exploring right to find ladders`);
+        this.logger.debug('Guard exploring right to find ladders');
         this.setState(GuardState.RUNNING_RIGHT);
         this.lastDirection = 1;
         return;
@@ -457,7 +461,7 @@ export class Guard {
     }
   }
   
-  private setState(newState: GuardState): void {
+  protected setState(newState: GuardState): void {
     if (this.state !== newState) {
       // Handle physics changes when entering/leaving climbing state
       const body = this.sprite.body as Phaser.Physics.Arcade.Body;
@@ -560,7 +564,7 @@ export class Guard {
     
     // Guard has been in hole for less than the escape time - can escape
     if (this.holeTimer < this.holeEscapeTime) {
-      console.log(`🏃 Guard escaping hole after ${(this.holeTimer / 1000).toFixed(1)}s`);
+      this.logger.debug(`Guard escaping hole after ${(this.holeTimer / 1000).toFixed(1)}s`);
       this.setState(GuardState.IDLE);
       this.currentHole = null;
       this.holeTimer = 0;
@@ -573,7 +577,7 @@ export class Guard {
     }
     
     // Guard trapped too long - will be killed and respawn
-    console.log(`💀 Guard trapped in hole for ${(this.holeTimer / 1000).toFixed(1)}s - triggering respawn`);
+    this.logger.debug(`Guard trapped in hole for ${(this.holeTimer / 1000).toFixed(1)}s - triggering respawn`);
     
     // Trigger respawn immediately 
     this.respawnAtStart();
@@ -583,10 +587,10 @@ export class Guard {
   
   // Respawn guard at starting position
   private respawnAtStart(): void {
-    console.log(`💀 Guard killed in hole, respawning at spawn position (${this.spawnX}, ${this.spawnY})`);
+    this.logger.debug(`Guard killed in hole, respawning at spawn position (${this.spawnPosition.x}, ${this.spawnPosition.y})`);
     
     // Move guard back to spawn position
-    this.sprite.setPosition(this.spawnX, this.spawnY);
+    this.sprite.setPosition(this.spawnPosition.x, this.spawnPosition.y);
     
     // Reset physics immediately
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
@@ -703,6 +707,7 @@ export class Guard {
   }
 
   public destroy(): void {
-    this.sprite.destroy();
+    // Call parent destroy method to handle common cleanup
+    super.destroy();
   }
 }

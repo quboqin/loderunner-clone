@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { SCENE_KEYS } from '@/config/GameConfig';
+import { Logger, LogCategory } from '@/utils/Logger';
 
 export class MenuScene extends Scene {
   private selectedOption = 0;
@@ -95,13 +96,13 @@ export class MenuScene extends Scene {
 
   private updateMenuHighlight(): void {
     if (!this.menuOptions || this.menuOptions.length === 0) {
-      console.warn('MenuScene: menuOptions not initialized');
+      Logger.error(LogCategory.UI, 'MenuScene: menuOptions not initialized');
       return;
     }
     
     this.menuOptions.forEach((option, index) => {
       if (!option) {
-        console.warn(`MenuScene: menu option at index ${index} is null`);
+        Logger.error(LogCategory.UI, `MenuScene: menu option at index ${index} is null`);
         return;
       }
       

@@ -348,4 +348,7 @@ I think there is a problem with the rewrites rules， As a vercel-deployment-spe
 ## Day 6
 38. I want to change the deployment platform from Vercel to Netlify, modify all relevant configuration files. Don't delete Vercel for now, just add Netlify.
 
+39. As an architect, review the entire project again to see where optimizations are needed. For example, is it possible to extract the Player's logic from the GameScene, just like the Guard's?
+
+Refer to the Phaser architecture and the previous document ARCHITECTURE_REVIEW.md, conduct an in - think hrader again, modify ARCHITECTURE_REVIEW.md, and then come up with the subsequent actions. The first step of the action is to clean up unnecessary console logs.
 

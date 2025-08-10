@@ -38,6 +38,19 @@ export enum TileType {
   GUARD_START = 7
 }
 
+export enum PlayerState {
+  IDLE = 'idle',
+  RUNNING_LEFT = 'running_left',
+  RUNNING_RIGHT = 'running_right', 
+  CLIMBING = 'climbing',
+  BAR_LEFT = 'bar_left',
+  BAR_RIGHT = 'bar_right',
+  FALLING = 'falling',
+  DIGGING_LEFT = 'digging_left',
+  DIGGING_RIGHT = 'digging_right',
+  INVINCIBLE = 'invincible'
+}
+
 export interface HoleData {
   gridX: number;
   gridY: number;

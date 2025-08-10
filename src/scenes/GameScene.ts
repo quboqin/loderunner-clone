@@ -3,13 +3,15 @@ import { SCENE_KEYS, GAME_CONFIG } from '@/config/GameConfig';
 import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
+import { InputManager } from '@/managers/InputManager';
 import { Guard, GuardState } from '@/entities/Guard';
+import { Player } from '@/entities/Player';
+import { GameLogger, LevelLogger, GuardLogger, PhysicsLogger } from '@/utils/Logger';
 
 export class GameScene extends Scene {
   private gameState!: GameState;
-  private player!: Phaser.GameObjects.Sprite;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasdKeys!: { [key: string]: Phaser.Input.Keyboard.Key };
+  private player!: Player;
+  private inputManager!: InputManager;
   private scoreText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private livesText!: Phaser.GameObjects.Text;
@@ -42,12 +44,12 @@ export class GameScene extends Scene {
     
     this.initializeGameState();
     this.initializeAudio();
+    this.setupInput(); // Initialize InputManager before creating Player
     this.createCollisionGroups();
     this.createLevel();
     this.createPlayer();
     this.createGuards(); // Create guards after player
     this.createUI();
-    this.setupInput();
     this.setupCollisions();
     this.initializeDebug();
     
@@ -89,7 +91,7 @@ export class GameScene extends Scene {
     const levelHeight = 16 * 32; // 512 pixels (unscaled)
     this.physics.world.setBounds(0, 0, levelWidth, levelHeight);
     
-    console.log(`🌍 World bounds set: ${levelWidth}x${levelHeight} pixels (unscaled coordinates)`);
+    PhysicsLogger.debug(`World bounds set: ${levelWidth}x${levelHeight} pixels (unscaled coordinates)`);
     
     // Create static groups for different tile types
     this.solidTiles = this.physics.add.staticGroup();
@@ -116,7 +118,7 @@ export class GameScene extends Scene {
       totalGold: 0 // Will be set when level loads
     };
     
-    console.log(`🎮 Game state initialized - Level: ${preservedLevel}, Lives: ${preservedLives}, Score: ${preservedScore}`);
+    GameLogger.debug(`Game state initialized - Level: ${preservedLevel}, Lives: ${preservedLives}, Score: ${preservedScore}`);
     
     // Initialize invincibility state
     this.playerInvincible = false;
@@ -129,7 +131,7 @@ export class GameScene extends Scene {
     // Load level data from classic levels
     const levelsData = this.cache.json.get('classic-levels');
     const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
-    console.log(`levelKey = ${levelKey}`)
+    LevelLogger.debug(`Loading level key: ${levelKey}`);
     let currentLevelData = levelsData.levels[levelKey];
     
     // If level doesn't exist, fallback to level 1
@@ -224,42 +226,24 @@ export class GameScene extends Scene {
   private createPlayer(): void {
     const startPos = this.registry.get('playerStart') || { x: 400, y: 400 };
     
+    // Create Player entity
+    const playerConfig = {
+      scene: this,
+      x: startPos.x,
+      y: startPos.y,
+      texture: 'runner',
+      frame: 'runner_00'
+    };
     
-    // Create player sprite using IBM runner atlas
-    this.player = this.add.sprite(startPos.x, startPos.y, 'runner', 'runner_00');
-    this.player.setScale(1.6); // Scale from 20x22 to ~32x32
-    this.player.setDepth(1000); // Ensure player renders above all tiles and holes
-    this.player.play('player-idle');
+    this.player = new Player(playerConfig, this.inputManager, this.soundManager);
     
-    this.physics.add.existing(this.player);
-    
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    playerBody.setCollideWorldBounds(true);
-    // With 1.6x scaling, sprite is ~32x35 display size  
-    // Use smaller collision box to fit through single-tile gaps (32px tiles)
-    // IMPORTANT: setSize() multiplies by sprite scale, so compensate for 1.6x scale
-    const desiredBodyWidth = 16;
-    const desiredBodyHeight = 28;
-    const spriteScale = 1.6;
-    playerBody.setSize(desiredBodyWidth / spriteScale, desiredBodyHeight / spriteScale);
-    
-    
-    // IMPORTANT: setOffset() also multiplies by sprite scale, so compensate for 1.6x scale
-    const desiredOffsetX = 8; // Center horizontally 
-    const desiredOffsetY = 4; // Safe Y offset with minimal gap
-    playerBody.setOffset(desiredOffsetX / spriteScale, desiredOffsetY / spriteScale);
-    
-    // CRITICAL FIX: Explicitly enable gravity for the player body
-    // Individual bodies don't inherit global gravity automatically in Phaser
-    playerBody.setGravityY(800); // Match the global gravity
-    
-    
+    GameLogger.debug(`Player created at position (${startPos.x}, ${startPos.y})`);
   }
 
   private createGuards(): void {
     // Clear existing guards first (in case of recreation)
     if (this.guards && this.guards.length > 0) {
-      console.log(`Destroying ${this.guards.length} existing guards before creating new ones`);
+      GuardLogger.debug(`Destroying ${this.guards.length} existing guards before creating new ones`);
       this.guards.forEach(guard => guard.destroy());
       this.guards = [];
     }
@@ -267,12 +251,12 @@ export class GameScene extends Scene {
     // Load level data to get guard positions
     const levelsData = this.cache.json.get('classic-levels');
     const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
-    console.log(`Loading level: ${levelKey}`);
+    LevelLogger.debug(`Loading level: ${levelKey}`);
     let currentLevelData = levelsData.levels[levelKey];
     
     // If level doesn't exist, fallback to level 1
     if (!currentLevelData) {
-      console.log(`Level ${levelKey} not found, falling back to level-001`);
+      LevelLogger.warn(`Level ${levelKey} not found, falling back to level-001`);
       currentLevelData = levelsData.levels['level-001'];
     }
     
@@ -280,10 +264,10 @@ export class GameScene extends Scene {
     const levelInfo = AssetManager.parseLevelData(currentLevelData);
     
     // Create guard AI entities
-    console.log(`Creating ${levelInfo.guards.length} guards for level ${levelKey}`);
+    GuardLogger.debug(`Creating ${levelInfo.guards.length} guards for level ${levelKey}`);
     levelInfo.guards.forEach((guardPos: { x: number; y: number }, index: number) => {
-      console.log(`Creating guard ${index} at position (${guardPos.x + 16}, ${guardPos.y + 16})`);
-      const guard = new Guard(this, guardPos.x + 16, guardPos.y + 16, this.player);
+      GuardLogger.debug(`Creating guard ${index} at position (${guardPos.x + 16}, ${guardPos.y + 16})`);
+      const guard = new Guard(this, guardPos.x + 16, guardPos.y + 16, this.player.sprite);
       guard.setCollisionCallbacks(this.ladderTiles, this.ropeTiles, this.solidTiles);
       this.guards.push(guard);
     });
@@ -291,7 +275,7 @@ export class GameScene extends Scene {
     // Set up guard-to-guard collision detection to prevent overlapping
     this.setupGuardToGuardCollisions();
     
-    console.log(`Total guards created: ${this.guards.length}`);
+    GuardLogger.debug(`Total guards created: ${this.guards.length}`);
   }
 
   private setupGuardToGuardCollisions(): void {
@@ -309,7 +293,7 @@ export class GameScene extends Scene {
       }
     }
     
-    console.log(`Set up ${this.guards.length * (this.guards.length - 1) / 2} guard-to-guard collision pairs`);
+    GuardLogger.debug(`Set up ${this.guards.length * (this.guards.length - 1) / 2} guard-to-guard collision pairs`);
   }
 
   private handleGuardToGuardCollision(guardA: Guard, guardB: Guard): void {
@@ -349,7 +333,7 @@ export class GameScene extends Scene {
 
   private setupCollisions(): void {
     // Player collides with solid tiles (walls, floors, bricks, and ladder tops)
-    this.physics.add.collider(this.player, this.solidTiles, undefined, (player: any, tile: any) => {
+    this.physics.add.collider(this.player.sprite, this.solidTiles, undefined, (player: any, tile: any) => {
       const playerBody = player.body as Phaser.Physics.Arcade.Body;
       const tileData = tile.getData('tileType');
       
@@ -362,8 +346,8 @@ export class GameScene extends Scene {
         const movingUp = playerBody.velocity.y < 0;
         
         // Get climbing state and movement input
-        const isClimbing = this.player.getData('onLadder');
-        const hasDownInput = this.cursors.down.isDown || this.wasdKeys.S.isDown;
+        const climbingState = this.player.getClimbingState();
+        const hasDownInput = this.inputManager.isDownPressed();
         
         // If player is moving up, always allow pass-through
         if (movingUp) {
@@ -377,7 +361,7 @@ export class GameScene extends Scene {
         }
         
         // If player is already climbing, allow pass-through to prevent getting stuck
-        if (isClimbing) {
+        if (climbingState.onLadder) {
           return false; // Allow pass-through when in climbing state
         }
         
@@ -389,7 +373,7 @@ export class GameScene extends Scene {
     }, this);
     
     // Player collision with gold - automatic collection
-    this.physics.add.overlap(this.player, this.goldSprites, (_player: any, gold: any) => {
+    this.physics.add.overlap(this.player.sprite, this.goldSprites, (_player: any, gold: any) => {
       this.collectGold(gold as Phaser.GameObjects.Sprite);
     }, undefined, this);
     
@@ -441,9 +425,8 @@ export class GameScene extends Scene {
   }
 
   private setupInput(): void {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    
-    this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D,Z,X') as { [key: string]: Phaser.Input.Keyboard.Key };
+    // Initialize InputManager for centralized input handling
+    this.inputManager = new InputManager(this);
 
     // ESC key to return to menu
     this.input.keyboard!.on('keydown-ESC', () => {
@@ -452,10 +435,12 @@ export class GameScene extends Scene {
 
     // Add digging controls
     this.input.keyboard!.on('keydown-Z', () => {
+      this.player.digLeft();
       this.digHole('left');
     });
 
     this.input.keyboard!.on('keydown-X', () => {
+      this.player.digRight();
       this.digHole('right');
     });
 
@@ -471,8 +456,9 @@ export class GameScene extends Scene {
     try {
       this.updateCounter++;
       
+      // Update Player entity
+      this.player.update(time, delta);
       
-      this.handlePlayerMovement();
       this.updateUI();
       this.updatePlayerState();
       this.updateGuards(time, delta);
@@ -490,9 +476,6 @@ export class GameScene extends Scene {
     // Check ladder/rope state using continuous position-based detection
     this.updateClimbableState();
     
-    // Enforce rope Y position lock
-    this.enforceRopeYLock();
-    
     // Check for holes player might fall through
     this.checkHoleCollisions();
     
@@ -502,11 +485,11 @@ export class GameScene extends Scene {
 
   private updateClimbableState(): void {
     // Enhanced ladder detection with multiple contact points
-    const playerCenterX = this.player.x;
-    const playerCenterY = this.player.y;
+    const playerCenterX = this.player.sprite.x;
+    const playerCenterY = this.player.sprite.y;
     
     // Calculate detection points - center, bottom, and top areas of player
-    const playerHalfHeight = this.player.displayHeight / 2;
+    const playerHalfHeight = this.player.sprite.displayHeight / 2;
     const detectionPoints = [
       // Player center - primary detection point
       { x: playerCenterX, y: playerCenterY },
@@ -563,7 +546,7 @@ export class GameScene extends Scene {
     const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
     
     // Don't detect rope if player is jumping from rope
-    const jumpingFromRope = this.player.getData('jumpingFromRope');
+    const jumpingFromRope = false;
     if (!jumpingFromRope) {
       this.ropeTiles.children.entries.forEach((tile: any) => {
         // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
@@ -580,7 +563,7 @@ export class GameScene extends Scene {
     }
     
     // Store detection results for debug display
-    this.player.setData('detectionResults', detectionResults);
+    this.player.setDetectionResults(detectionResults);
     
     // Priority system: Rope takes priority over ladder when both are detected
     // This allows natural ladder-to-rope transitions at the top of ladders
@@ -591,14 +574,14 @@ export class GameScene extends Scene {
     }
     
     // Update player data
-    this.player.setData('onLadder', onLadder);
-    this.player.setData('onRope', onRope);
+    this.player.setClimbableState(onLadder, onRope);
     
     // Initialize rope Y lock when first touching rope
-    if (onRope && !this.player.getData('wasOnRope')) {
+    // TODO: Fix rope detection - temporarily disabled
+    if (false) {
       // Calculate proper rope hanging position
       // Find the rope tile Y position and position player to hang from it
-      let ropeYPosition = this.player.y; // Default fallback
+      let ropeYPosition = this.player.sprite.y; // Default fallback
       
       this.ropeTiles.children.entries.forEach((tile: any) => {
         // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
@@ -613,33 +596,33 @@ export class GameScene extends Scene {
         }
       });
       
-      this.player.setData('ropeY', ropeYPosition);
+      // TODO: Set rope Y position in Player entity
       // Set position after detection to avoid disrupting rope state
     }
-    this.player.setData('wasOnRope', onRope);
+    // TODO: Handle wasOnRope state in Player entity
   }
   
   private enforceRopeYLock(): void {
-    const onRope = this.player.getData('onRope');
-    const jumpingFromRope = this.player.getData('jumpingFromRope');
+    const onRope = this.player.getClimbingState('onRope');
+    const jumpingFromRope = false;
     
     // Don't enforce rope lock if jumping from rope
     if (onRope && !jumpingFromRope) {
-      const lockedY = this.player.getData('ropeY');
-      const wasOnRope = this.player.getData('wasOnRope');
+      const lockedY = this.player.getClimbingState('ropeY');
+      const wasOnRope = this.player.getClimbingState('wasOnRope');
       
       if (lockedY !== undefined) {
         // If just grabbed rope, set position immediately
         if (onRope && !wasOnRope) {
-          this.player.setY(lockedY);
+          this.player.sprite.setY(lockedY);
         }
         // Otherwise, enforce position if drifted
-        else if (Math.abs(this.player.y - lockedY) > 0.1) {
+        else if (Math.abs(this.player.sprite.y - lockedY) > 0.1) {
           // Force position back to locked Y
-          this.player.setY(lockedY);
+          this.player.sprite.setY(lockedY);
           
           // Also update the physics body position to prevent drift
-          const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+          const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
           playerBody.y = lockedY - playerBody.height / 2 - playerBody.offset.y;
         }
       }
@@ -653,144 +636,10 @@ export class GameScene extends Scene {
     this.goldText.setText(`GOLD: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
   }
 
-  private handlePlayerMovement(): void {
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    const playerSprite = this.player;
-    const speed = 200;
-
-    // Get current climbing state
-    const onLadder = this.player.getData('onLadder');
-    const onRope = this.player.getData('onRope');
-    const isClimbing = onLadder || onRope;
-
-    // ALWAYS reset horizontal velocity
-    playerBody.setVelocityX(0);
-    let isMoving = false;
-
-    // Horizontal movement (always allowed)
-    if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
-      playerBody.setVelocityX(-speed);
-      playerSprite.play('player-run-left', true);
-      isMoving = true;
-    } else if (this.cursors.right.isDown || this.wasdKeys.D.isDown) {
-      playerBody.setVelocityX(speed);
-      playerSprite.play('player-run-right', true);
-      isMoving = true;
-    }
-
-    // Handle gravity and vertical movement based on climbing state
-    if (isClimbing) {
-      // CRITICAL: Disable gravity first
-      playerBody.setGravityY(0);
-      
-      // Check for movement input - ropes allow horizontal movement and jumping down
-      const onRope = this.player.getData('onRope');
-      const movingUp = this.cursors.up.isDown || this.wasdKeys.W.isDown;
-      const movingDown = this.cursors.down.isDown || this.wasdKeys.S.isDown;
-      const movingHorizontal = isMoving; // Already determined above from left/right input
-      
-      // For ropes: ignore up input, but allow down (jump/drop from rope)
-      const effectiveMovingUp = onRope ? false : movingUp;
-      const effectiveMovingDown = movingDown; // Allow down movement for both ladders and ropes
-      const hasAnyInput = effectiveMovingUp || effectiveMovingDown || movingHorizontal;
-      
-      if (hasAnyInput) {
-        // Enable physics when ANY movement is detected
-        playerBody.moves = true;
-        
-        // Handle vertical movement (only for ladders)
-        if (effectiveMovingUp) {
-          playerBody.setVelocityY(-speed);
-          if (!movingHorizontal) {
-            playerSprite.play('player-climb', true);
-          }
-          isMoving = true;
-        } else if (effectiveMovingDown && !onRope) {
-          // Ladder down movement
-          playerBody.setVelocityY(speed);
-          if (!movingHorizontal) {
-            playerSprite.play('player-climb', true);
-          }
-          isMoving = true;
-        } else if (effectiveMovingDown && onRope) {
-          // Jump down from rope - release rope and enable gravity
-          playerBody.moves = true;
-          playerBody.setGravityY(800); // Re-enable gravity
-          playerBody.setVelocityY(speed * 1.5); // Stronger initial downward velocity for jumping
-          
-          // Set jumping flag to prevent rope re-detection
-          this.player.setData('jumpingFromRope', true);
-          this.time.delayedCall(100, () => {
-            this.player.setData('jumpingFromRope', false);
-          });
-          
-          // Clear rope state to release from rope
-          this.player.setData('onRope', false);
-          this.player.setData('wasOnRope', false);
-          this.player.setData('ropeY', undefined);
-          
-          // Use falling animation if available
-          const movingLeft = this.cursors.left.isDown || this.wasdKeys.A.isDown;
-          const movingRight = this.cursors.right.isDown || this.wasdKeys.D.isDown;
-          if (movingLeft) {
-            playerSprite.play('player-fall-left', true);
-          } else if (movingRight) {
-            playerSprite.play('player-fall-right', true);
-          } else {
-            playerSprite.play('player-fall-right', true); // Default falling animation
-          }
-          isMoving = true;
-        } else if (movingHorizontal && onRope) {
-          // Rope horizontal movement - zero all Y forces
-          playerBody.setVelocityY(0);
-          playerBody.setAccelerationY(0);
-          
-          // Use bar animations for rope movement
-          const movingLeft = this.cursors.left.isDown || this.wasdKeys.A.isDown;
-          if (movingLeft) {
-            playerSprite.play('player-bar-left', true);
-          } else {
-            playerSprite.play('player-bar-right', true);
-          }
-        } else if (movingHorizontal && !onRope) {
-          // Ladder horizontal movement
-          playerBody.setVelocityY(0);
-          playerBody.setAccelerationY(0);
-        }
-      } else {
-        // CRITICAL FIX: Disable physics only when NO input at all
-        // This prevents sliding while allowing horizontal movement
-        playerBody.moves = false;
-        playerBody.setVelocityY(0);
-        playerBody.setAccelerationY(0);
-        
-        // For ropes, use stationary animation when not moving
-        if (onRope) {
-          // Use idle bar animation or first frame of bar sequence
-          playerSprite.play('player-idle'); // Will be replaced with proper rope hang animation
-        }
-      }
-    } else {
-      // Re-enable physics when not climbing
-      playerBody.moves = true;
-      if (playerBody.gravity.y !== 800) {
-        playerBody.setGravityY(800);
-        playerBody.setAccelerationY(0);
-      }
-      // Let gravity handle vertical movement - don't interfere with Y velocity
-    }
-
-    // Play idle animation if not moving
-    if (!isMoving) {
-      if (playerSprite.anims.currentAnim?.key !== 'player-idle') {
-        playerSprite.play('player-idle');
-      }
-    }
-  }
 
   private collectGold(goldSprite: Phaser.GameObjects.Sprite): void {
-    // Play gold collection sound
-    this.soundManager.playSFX('getGold');
+    // Delegate gold collection sound to Player
+    this.player.collectGold();
     
     // Update game state
     this.gameState.goldCollected++;
@@ -910,16 +759,16 @@ export class GameScene extends Scene {
   }
 
   private digHole(direction: 'left' | 'right'): void {
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    const playerGridX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
-    const playerGridY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
+    const playerGridX = Math.floor(this.player.sprite.x / GAME_CONFIG.tileSize);
+    const playerGridY = Math.floor(this.player.sprite.y / GAME_CONFIG.tileSize);
     
     // Calculate target hole position based on direction
     let targetX = playerGridX + (direction === 'left' ? -1 : 1);
     let targetY = playerGridY + 1; // Dig one tile below and to the side
     
     // Check if player is on solid ground (can't dig while falling)
-    if (!playerBody.onFloor() && !this.player.getData('onLadder')) {
+    if (!playerBody.onFloor() && !this.player.getClimbingState('onLadder')) {
       return; // Can't dig while in mid-air
     }
     
@@ -936,12 +785,12 @@ export class GameScene extends Scene {
     
     // Play player digging animation
     const digAnimationKey = direction === 'left' ? 'hole-dig-left' : 'hole-dig-right';
-    this.player.play(digAnimationKey);
+    this.player.sprite.play(digAnimationKey);
     
     // Return to idle animation after digging
     this.time.delayedCall(500, () => {
-      if (this.player.anims.currentAnim?.key.includes('hole-dig')) {
-        this.player.play('player-idle');
+      if (this.player.sprite.anims.currentAnim?.key.includes('hole-dig')) {
+        this.player.sprite.play('player-idle');
       }
     });
   }
@@ -1133,9 +982,9 @@ export class GameScene extends Scene {
   }
 
   private checkHoleCollisions(): void {
-    const playerGridX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
-    const playerGridY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerGridX = Math.floor(this.player.sprite.x / GAME_CONFIG.tileSize);
+    const playerGridY = Math.floor(this.player.sprite.y / GAME_CONFIG.tileSize);
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
     
     // Check if player is near or on any hole for rendering priority
     let nearHole = false;
@@ -1154,9 +1003,9 @@ export class GameScene extends Scene {
     
     // Boost player depth when near holes to ensure proper rendering
     if (nearHole) {
-      this.player.setDepth(1100); // Extra boost when near holes
+      this.player.sprite.setDepth(1100); // Extra boost when near holes
     } else {
-      this.player.setDepth(1000); // Normal depth
+      this.player.sprite.setDepth(1000); // Normal depth
     }
     
     // Check if player is standing on a hole
@@ -1165,7 +1014,7 @@ export class GameScene extends Scene {
     
     if (hole && !hole.isDigging) {
       // Player is on a hole and not in digging animation - make them fall
-      if (!this.player.getData('onLadder') && !this.player.getData('onRope')) {
+      if (!this.player.getClimbingState('onLadder') && !this.player.getClimbingState('onRope')) {
         // Enable gravity to make player fall through the hole
         if (playerBody.gravity.y === 0) {
           playerBody.setGravityY(800);
@@ -1180,7 +1029,7 @@ export class GameScene extends Scene {
     
     if (belowHole && !belowHole.isDigging) {
       // There's a hole below the player - they should fall through
-      if (!this.player.getData('onLadder') && !this.player.getData('onRope')) {
+      if (!this.player.getClimbingState('onLadder') && !this.player.getClimbingState('onRope')) {
         // Check if player is close enough to the hole to fall through
         const playerBottom = playerBody.y + playerBody.height;
         const holeTop = belowHole.sprite.y - (belowHole.sprite.displayHeight / 2);
@@ -1199,7 +1048,7 @@ export class GameScene extends Scene {
   private checkExitLadderCompletion(): void {
     // Debug logging
     if (this.gameState.goldCollected >= this.gameState.totalGold) {
-      console.log(`🚪 COMPLETION CHECK: ExitSprites: ${this.exitLadderSprites.length}, FirstVisible: ${this.exitLadderSprites[0]?.visible}, GoldCollected: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
+      GameLogger.debug(`Level completion check: ExitSprites: ${this.exitLadderSprites.length}, FirstVisible: ${this.exitLadderSprites[0]?.visible}, GoldCollected: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
     }
     
     // Only check if exit ladder sprites exist and are visible (all gold collected)
@@ -1213,8 +1062,8 @@ export class GameScene extends Scene {
     }
 
     // Check if player is at the top of the designated exit ladder
-    const playerCenterX = this.player.x;
-    const playerCenterY = this.player.y;
+    const playerCenterX = this.player.sprite.x;
+    const playerCenterY = this.player.sprite.y;
     const playerTileX = Math.floor(playerCenterX / GAME_CONFIG.tileSize);
     const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
     
@@ -1228,10 +1077,10 @@ export class GameScene extends Scene {
       const ladderPixelY = exitLadderTileY * GAME_CONFIG.tileSize;
       const ladderTopThreshold = ladderPixelY + (GAME_CONFIG.tileSize * 0.8); // Top 80% of ladder tile (more lenient)
       
-      console.log(`🚪 COMPLETION CHECK: On exit ladder! PlayerY: ${playerCenterY}, Threshold: ${ladderTopThreshold}`);
+      GameLogger.debug(`Level completion check: On exit ladder! PlayerY: ${playerCenterY}, Threshold: ${ladderTopThreshold}`);
       
       if (playerCenterY <= ladderTopThreshold) {
-        console.log('🎉 COMPLETING LEVEL!');
+        LevelLogger.info('Level completed successfully!');
         // Player reached the top of the exit ladder - complete level!
         this.completeLevel();
       }
@@ -1292,15 +1141,15 @@ export class GameScene extends Scene {
   private updateDebugVisuals(): void {
     if (!this.player || !this.debugMode) return;
     
-    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
     this.debugGraphics.clear();
     
     // 1. Red Rectangle: Visual sprite bounds
     const spriteBounds = {
-      x: this.player.x - this.player.displayWidth / 2,
-      y: this.player.y - this.player.displayHeight / 2,
-      width: this.player.displayWidth,
-      height: this.player.displayHeight
+      x: this.player.sprite.x - this.player.sprite.displayWidth / 2,
+      y: this.player.sprite.y - this.player.sprite.displayHeight / 2,
+      width: this.player.sprite.displayWidth,
+      height: this.player.sprite.displayHeight
     };
     this.debugGraphics.lineStyle(3, 0xff0000, 1);
     this.debugGraphics.strokeRect(spriteBounds.x, spriteBounds.y, spriteBounds.width, spriteBounds.height);
@@ -1317,8 +1166,8 @@ export class GameScene extends Scene {
     
     // 3. Green Grid: Tile grid overlay (around player)
     const tileSize = GAME_CONFIG.tileSize;
-    const playerTileX = Math.floor(this.player.x / tileSize);
-    const playerTileY = Math.floor(this.player.y / tileSize);
+    const playerTileX = Math.floor(this.player.sprite.x / tileSize);
+    const playerTileY = Math.floor(this.player.sprite.y / tileSize);
     
     // Draw 3x3 grid around player
     for (let tx = playerTileX - 1; tx <= playerTileX + 1; tx++) {
@@ -1333,7 +1182,7 @@ export class GameScene extends Scene {
     // 4. Yellow Dot: Sprite center point
     this.debugGraphics.lineStyle(0, 0x000000, 0);
     this.debugGraphics.fillStyle(0xffff00, 1);
-    this.debugGraphics.fillCircle(this.player.x, this.player.y, 4);
+    this.debugGraphics.fillCircle(this.player.sprite.x, this.player.sprite.y, 4);
     
     // 5. Orange Dot: Body center point
     const bodyCenterX = playerBody.x + playerBody.width / 2;
@@ -1346,34 +1195,33 @@ export class GameScene extends Scene {
   }
 
   private updateDebugText(playerBody: Phaser.Physics.Arcade.Body, bodyCenterX: number, bodyCenterY: number): void {
-    const onLadder = this.player.getData('onLadder');
-    const onRope = this.player.getData('onRope');
+    const onLadder = this.player.getClimbingState('onLadder');
+    const onRope = this.player.getClimbingState('onRope');
     const isClimbing = onLadder || onRope;
     
     // Calculate current tile position
-    const tileX = Math.floor(this.player.x / GAME_CONFIG.tileSize);
-    const tileY = Math.floor(this.player.y / GAME_CONFIG.tileSize);
+    const tileX = Math.floor(this.player.sprite.x / GAME_CONFIG.tileSize);
+    const tileY = Math.floor(this.player.sprite.y / GAME_CONFIG.tileSize);
     
     // Track position changes for debugging sliding
-    const prevX = this.player.getData('prevX') || this.player.x;
-    const prevY = this.player.getData('prevY') || this.player.y;
+    const prevX = this.player.getClimbingState('prevX') || this.player.sprite.x;
+    const prevY = this.player.getClimbingState('prevY') || this.player.sprite.y;
     const positionDelta = {
-      x: this.player.x - prevX,
-      y: this.player.y - prevY
+      x: this.player.sprite.x - prevX,
+      y: this.player.sprite.y - prevY
     };
     
     // Store current position for next frame comparison
-    this.player.setData('prevX', this.player.x);
-    this.player.setData('prevY', this.player.y);
+    // TODO: Track previous position in Player entity if needed
     
     const debugInfo = [
       'DEBUG MODE - All Sprite & Body Coordinates',
       '(Press J to toggle off)',
       '',
       '=== SPRITE INFORMATION ===',
-      `Sprite Center (x,y): (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`,
-      `Sprite Size: ${this.player.displayWidth.toFixed(1)} x ${this.player.displayHeight.toFixed(1)}`,
-      `Sprite Scale: ${this.player.scaleX}`,
+      `Sprite Center (x,y): (${this.player.sprite.x.toFixed(1)}, ${this.player.sprite.y.toFixed(1)})`,
+      `Sprite Size: ${this.player.sprite.displayWidth.toFixed(1)} x ${this.player.sprite.displayHeight.toFixed(1)}`,
+      `Sprite Scale: ${this.player.sprite.scaleX}`,
       `Current Tile: (${tileX}, ${tileY})`,
       '',
       '=== COLLISION BODY INFORMATION ===',
@@ -1393,7 +1241,7 @@ export class GameScene extends Scene {
       `On Rope: ${onRope ? '✓' : '✗'}`,
       `Is Climbing: ${isClimbing ? '✓' : '✗'}`,
       `Gravity Disabled: ${playerBody.gravity.y === 0 ? '✓' : '✗'}`,
-      `Detection Points: ${this.player.getData('detectionResults')?.join(', ') || 'None'}`,
+      `Detection Points: ${this.player.getDetectionResults()?.join(', ') || 'None'}`,
       '',
       '=== MOVEMENT TRACKING ===',
       `Position Delta: (${positionDelta.x.toFixed(2)}, ${positionDelta.y.toFixed(2)})`,
@@ -1443,7 +1291,7 @@ export class GameScene extends Scene {
         if (!isActivelyChasing && (isSlowlyFalling || (isOnGround && !isMovingHorizontally))) {
           // Special handling for bottom-layer holes - shorter trap time
           if (holeData.gridY >= 15) {
-            console.log(`🕳️ Guard trapped in BOTTOM hole - will respawn quickly`);
+            GuardLogger.debug('Guard trapped in bottom hole - will respawn quickly');
           }
           guard.fallIntoHole(holeKey);
         }
@@ -1460,11 +1308,11 @@ export class GameScene extends Scene {
     } else if (this.playerInvincible && currentTime >= this.invincibilityEndTime) {
       // End invincibility period
       this.playerInvincible = false;
-      this.player.setAlpha(1.0);
+      this.player.sprite.setAlpha(1.0);
     }
     
     for (const guard of this.guards) {
-      if (guard.checkPlayerCollision(this.player)) {
+      if (guard.checkPlayerCollision(this.player.sprite)) {
         this.handlePlayerDeath();
         break; // Only one collision needed
       }
@@ -1472,20 +1320,20 @@ export class GameScene extends Scene {
   }
 
   private handlePlayerDeath(): void {
-    console.log(`💀 Player death - Lives: ${this.gameState.lives} → ${this.gameState.lives - 1}`);
+    GameLogger.debug(`Player death - Lives: ${this.gameState.lives} → ${this.gameState.lives - 1}`);
     
     // Handle player death
     this.gameState.lives -= 1;
     
     // Play death sound
-    this.soundManager.playSFX('dead');
+    this.player.die();
     
     if (this.gameState.lives <= 0) {
-      console.log('💀 GAME OVER - All lives lost');
+      GameLogger.info('Game Over - All lives lost');
       // Game over - go to menu
       this.scene.start(SCENE_KEYS.MENU);
     } else {
-      console.log('💀 Restarting level - Lives remaining: ' + this.gameState.lives);
+      GameLogger.debug('Restarting level - Lives remaining: ' + this.gameState.lives);
       // Restart the level (preserving lives and current level)
       this.scene.restart();
     }
@@ -1496,26 +1344,26 @@ export class GameScene extends Scene {
     // (especially useful after death/restart)
     this.playerInvincible = true;
     this.invincibilityEndTime = this.time.now + 2000; // 2 seconds
-    this.player.setAlpha(0.7); // Slight transparency to show invincibility
+    this.player.activateInvincibility(2000); // Use Player entity's invincibility system
     
-    console.log(`🛡️ Startup invincibility activated for 2 seconds`);
+    GameLogger.debug('Startup invincibility activated for 2 seconds');
   }
 
   private checkGuardEscapeBeforeHoleFills(holeKey: string): void {
-    console.log(`🕳️ Checking if guards can escape from hole ${holeKey} before it fills`);
+    GuardLogger.debug(`Checking if guards can escape from hole ${holeKey} before it fills`);
     
     // Find guards in this specific hole
     const guardsInHole = this.guards.filter(guard => guard.getCurrentHole() === holeKey);
     
     if (guardsInHole.length > 0) {
-      console.log(`Found ${guardsInHole.length} guard(s) in hole ${holeKey}`);
+      GuardLogger.debug(`Found ${guardsInHole.length} guard(s) in hole ${holeKey}`);
       
       guardsInHole.forEach((guard, index) => {
         const canEscape = guard.attemptHoleEscape();
         if (canEscape) {
-          console.log(`🏃 Guard ${index} escaped from hole ${holeKey}!`);
+          GuardLogger.debug(`Guard ${index} escaped from hole ${holeKey}`);
         } else {
-          console.log(`💀 Guard ${index} trapped in hole ${holeKey} - will respawn`);
+          GuardLogger.debug(`Guard ${index} trapped in hole ${holeKey} - will respawn`);
         }
       });
     }
