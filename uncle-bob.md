@@ -331,3 +331,16 @@ If the Guard and the Player are not on the same horizontal plane (possibly below
 The positions of the Guards should not overlap.
 
 37. As a vercel-deployment-specialist, please refer to ../vercel. This is the worktree of the vercel-deploy branch of this project before, and it was successfully deployed on Vercel at that time.
+
+The problem still hasn't been solved. I checked the requests in the browser console's network section. The return code is 200, but the content is all index.html, so there was an error in parsing the json later.
+got these error
+```
+phaser-CAd4oSEJ.js:3410 Failed to process file: json "runner"
+......
+phaser-CAd4oSEJ.js:3557 Uncaught SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at initialize.onProcess (phaser-CAd4oSEJ.js:3557:549)
+    at initialize.nextFile (phaser-CAd4oSEJ.js:3422:5708)
+    at initialize.onLoad (phaser-CAd4oSEJ.js:3410:1877)
+```
+I think there is a problem with the rewrites rules， As a vercel-deployment-specialist， please think harder
