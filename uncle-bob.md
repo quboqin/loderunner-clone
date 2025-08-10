@@ -345,6 +345,4 @@ phaser-CAd4oSEJ.js:3557 Uncaught SyntaxError: Unexpected token '<', "<!DOCTYPE "
 ```
 I think there is a problem with the rewrites rules， As a vercel-deployment-specialist， please think harder
 
-It's still the same question. Can you refer to the vite documentation?
 
-You probably have a catch-all rewrite that hijacks static files. Fix by using Vercel routes with handle: "filesystem" so Vercel serves real files first and only falls back to index.html when no file exists.
