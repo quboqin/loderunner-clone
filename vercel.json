@@ -21,6 +21,26 @@
   ],
   "rewrites": [
     {
+      "source": "/assets/anims/(.*)",
+      "destination": "/anims/$1"
+    },
+    {
+      "source": "/assets/audio/(.*)",
+      "destination": "/audio/$1"
+    },
+    {
+      "source": "/assets/images/(.*)",
+      "destination": "/images/$1"
+    },
+    {
+      "source": "/assets/levels/(.*)",
+      "destination": "/levels/$1"
+    },
+    {
+      "source": "/assets/sprites/(.*)",
+      "destination": "/sprites/$1"
+    },
+    {
       "source": "/assets/(.*)",
       "destination": "/assets/$1"
     },
