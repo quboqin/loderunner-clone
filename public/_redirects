@@ -1,0 +1,6 @@
+# Netlify _redirects file for SPA routing
+# Static assets should be served first (Netlify handles this automatically)
+# Fallback to index.html for client-side routing
+
+# SPA fallback - serve index.html for all non-asset routes
+/*    /index.html   200

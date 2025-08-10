@@ -345,4 +345,7 @@ phaser-CAd4oSEJ.js:3557 Uncaught SyntaxError: Unexpected token '<', "<!DOCTYPE "
 ```
 I think there is a problem with the rewrites rules， As a vercel-deployment-specialist， please think harder
 
+## Day 6
+38. I want to change the deployment platform from Vercel to Netlify, modify all relevant configuration files. Don't delete Vercel for now, just add Netlify.
+
 
