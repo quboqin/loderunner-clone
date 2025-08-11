@@ -2,10 +2,10 @@ import { GameConfig } from '@/types/GameTypes';
 
 export const GAME_CONFIG: GameConfig = {
   width: 896,  // 28 tiles * 32px
-  height: 672, // 21 tiles * 32px
+  height: 512, // 16 tiles * 32px
   tileSize: 32,
   levelWidth: 28,
-  levelHeight: 21
+  levelHeight: 16
 };
 
 export const SCENE_KEYS = {

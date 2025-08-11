@@ -101,9 +101,9 @@ export class Bug27ValidationTests {
       const debugInfo = await extractDebugInfo(this.page);
       const bodySize = debugInfo.bodySize;
       
-      const expectedWidth = 16;
-      const expectedHeight = 28;
-      const invalidWidth = 25.6;
+      const expectedWidth = 16 / browserConfig.bug27.spriteScale; // Physics body should be unscaled
+      const expectedHeight = 28 / browserConfig.bug27.spriteScale;
+      const invalidWidth = 25.6; // Old incorrect scaled size
       const invalidHeight = 44.8;
       
       const widthCorrect = Math.abs(bodySize.x - expectedWidth) < 0.1;
@@ -151,9 +151,9 @@ export class Bug27ValidationTests {
       const debugInfo = await extractDebugInfo(this.page);
       const bodyOffset = debugInfo.bodyOffset;
       
-      const expectedX = 8;
-      const expectedY = 4;
-      const invalidX = 12.8;
+      const expectedX = 8 / browserConfig.bug27.spriteScale;
+      const expectedY = 4 / browserConfig.bug27.spriteScale;
+      const invalidX = 12.8; // Old incorrect scaled offset
       const invalidY = 6.4;
       
       const xCorrect = Math.abs(bodyOffset.x - expectedX) < 0.1;

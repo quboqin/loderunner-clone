@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "node ./tests/run-automated-tests.js",
     "build:netlify": "npm run build",
     "serve:netlify": "netlify dev"
   },

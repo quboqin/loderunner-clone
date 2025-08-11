@@ -12,6 +12,9 @@ export class SoundManager {
   static getInstance(scene: Phaser.Scene): SoundManager {
     if (!SoundManager.instance) {
       SoundManager.instance = new SoundManager(scene);
+    } else {
+      // Always ensure we use the latest scene for sound context
+      SoundManager.instance.scene = scene;
     }
     return SoundManager.instance;
   }

@@ -70,8 +70,8 @@ export class AssetManager {
     createAnimation('player-climb', 'runUpDown', 8, -1);
     createAnimation('player-bar-right', 'barRight', 8, -1);
     createAnimation('player-bar-left', 'barLeft', 8, -1);
-    createAnimation('player-dig-right', 'digRight', 1, 0);
-    createAnimation('player-dig-left', 'digLeft', 1, 0);
+    createAnimation('player-dig-right', 'digRight', 12, 0);
+    createAnimation('player-dig-left', 'digLeft', 12, 0);
     createAnimation('player-fall-right', 'fallRight', 1, 0);
     createAnimation('player-fall-left', 'fallLeft', 1, 0);
 

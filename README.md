@@ -66,6 +66,9 @@ npm install
 npm run dev
 
 # Open http://localhost:3000 in your browser
+ 
+# Run automated test plan (requires MCP runner)
+npm test
 ```
 
 ### Building for Production

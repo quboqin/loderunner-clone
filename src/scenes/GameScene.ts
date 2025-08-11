@@ -85,10 +85,9 @@ export class GameScene extends Scene {
 
   private createCollisionGroups(): void {
     // Set world bounds to prevent entities from escaping game world
-    // Level is 28 tiles wide x 16 tiles high, each tile is 32 pixels
-    // Entity positions use UNSCALED coordinates (sprites are scaled visually only)
-    const levelWidth = 28 * 32; // 896 pixels (unscaled)
-    const levelHeight = 16 * 32; // 512 pixels (unscaled)
+    // Match world size to configured level size (tiles * tileSize)
+    const levelWidth = GAME_CONFIG.levelWidth * GAME_CONFIG.tileSize;
+    const levelHeight = GAME_CONFIG.levelHeight * GAME_CONFIG.tileSize;
     this.physics.world.setBounds(0, 0, levelWidth, levelHeight);
     
     PhysicsLogger.debug(`World bounds set: ${levelWidth}x${levelHeight} pixels (unscaled coordinates)`);
@@ -736,27 +735,17 @@ export class GameScene extends Scene {
       return; // Can't dig here
     }
     
-    // Play digging sound
-    this.soundManager.playSFX('dig');
-    
     // Create the hole
     this.createHole(targetX, targetY, direction);
-    
-    // Play player digging animation
-    const digAnimationKey = direction === 'left' ? 'hole-dig-left' : 'hole-dig-right';
-    this.player.sprite.play(digAnimationKey);
-    
-    // Return to idle animation after digging
-    this.time.delayedCall(500, () => {
-      if (this.player.sprite.anims.currentAnim?.key.includes('hole-dig')) {
-        this.player.sprite.play('player-idle');
-      }
-    });
+    // Player entity handles its own dig animation and SFX
   }
 
   private canDigAtPosition(gridX: number, gridY: number): boolean {
     // Check bounds
-    if (gridX < 0 || gridX >= 28 || gridY < 0 || gridY >= 16) {
+    if (
+      gridX < 0 || gridX >= GAME_CONFIG.levelWidth ||
+      gridY < 0 || gridY >= GAME_CONFIG.levelHeight
+    ) {
       return false;
     }
     
@@ -1223,8 +1212,8 @@ export class GameScene extends Scene {
   }
   
   private checkGuardHoleCollisions(guard: Guard): void {
-    const guardX = Math.floor(guard.sprite.x / 32);
-    const guardY = Math.floor(guard.sprite.y / 32);
+    const guardX = Math.floor(guard.sprite.x / GAME_CONFIG.tileSize);
+    const guardY = Math.floor(guard.sprite.y / GAME_CONFIG.tileSize);
     const holeKey = `${guardX},${guardY}`;
     
     // Check if guard is at a hole position

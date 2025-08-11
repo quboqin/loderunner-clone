@@ -260,10 +260,10 @@ async function executeWithMCPConfig(page) {
     
     if (debugInfo.found && debugInfo.bodyWidth !== 'N/A') {
       // Use config values for validation
-      const expectedWidth = browserConfig.bug27.expectedBodySize.width;
-      const expectedHeight = browserConfig.bug27.expectedBodySize.height;
-      const expectedOffsetX = browserConfig.bug27.expectedBodyOffset.x;
-      const expectedOffsetY = browserConfig.bug27.expectedBodyOffset.y;
+      const expectedWidth = browserConfig.bug27.expectedBodySize.width / browserConfig.bug27.spriteScale;
+      const expectedHeight = browserConfig.bug27.expectedBodySize.height / browserConfig.bug27.spriteScale;
+      const expectedOffsetX = browserConfig.bug27.expectedBodyOffset.x / browserConfig.bug27.spriteScale;
+      const expectedOffsetY = browserConfig.bug27.expectedBodyOffset.y / browserConfig.bug27.spriteScale;
       
       // Body Size Test
       const actualWidth = debugInfo.bodyWidth;
