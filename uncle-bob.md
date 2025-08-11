@@ -372,3 +372,7 @@ I asked GPT-5 to try to help me solve this problem. It added some logs, and the 
 ✅ LEVEL COMPLETE! Player reached exit position!                   Logger.ts:114 [LEVEL_LOADING] Level completed at highest accessible position (18,0)
 
 The logic is correct, but starting from Level 2, when entering a level, "LEVEL COMPLETE! Level" will also be output. There is a minor issue here. Optimize it, including removing unnecessary console logs.
+
+42. After adjusting the `levelHeight` from 21 to 16, both the Game Info and Instructions are displayed on the game screen.
+
+I mean to move this information outside the in-game playing area, not place it on top.

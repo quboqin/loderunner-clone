@@ -2,7 +2,7 @@ import { GameConfig } from '@/types/GameTypes';
 
 export const GAME_CONFIG: GameConfig = {
   width: 896,  // 28 tiles * 32px
-  height: 512, // 16 tiles * 32px
+  height: 600, // 16 tiles * 32px + 88px UI space
   tileSize: 32,
   levelWidth: 28,
   levelHeight: 16

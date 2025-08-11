@@ -393,45 +393,42 @@ export class GameScene extends Scene {
 
   private createUI(): void {
     const padding = 20;
+    const gameAreaHeight = GAME_CONFIG.levelHeight * GAME_CONFIG.tileSize; // 512px
+    const uiStartY = gameAreaHeight + 10; // Start UI 10px below game area
     
-    this.scoreText = this.add.text(padding, GAME_CONFIG.height - padding - 90, `SCORE: ${this.gameState.score}`, {
+    // Position game info elements below the game playing area
+    this.scoreText = this.add.text(padding, uiStartY, `SCORE: ${this.gameState.score}`, {
       fontSize: '24px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
     }).setDepth(2000);
 
-    this.levelText = this.add.text(padding, GAME_CONFIG.height - padding - 60, `LEVEL: ${this.gameState.currentLevel}`, {
+    this.levelText = this.add.text(padding + 200, uiStartY, `LEVEL: ${this.gameState.currentLevel}`, {
       fontSize: '24px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
     }).setDepth(2000);
 
-    this.livesText = this.add.text(padding, GAME_CONFIG.height - padding - 30, `LIVES: ${this.gameState.lives}`, {
+    this.livesText = this.add.text(padding + 400, uiStartY, `LIVES: ${this.gameState.lives}`, {
       fontSize: '24px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
     }).setDepth(2000);
 
-    this.goldText = this.add.text(GAME_CONFIG.width - padding, padding, 
+    this.goldText = this.add.text(GAME_CONFIG.width - padding, uiStartY, 
       `GOLD: ${this.gameState.goldCollected}/${this.gameState.totalGold}`, {
       fontSize: '24px',
       color: '#FFD700',
       fontFamily: 'Arial, sans-serif'
     }).setOrigin(1, 0).setDepth(2000);
 
-    this.add.text(GAME_CONFIG.width - padding, GAME_CONFIG.height - padding - 60, 
-      'ESC - Menu', {
-      fontSize: '18px',
+    // Position instructions below the game info
+    this.add.text(padding, uiStartY + 35, 
+      'ESC - Menu  |  Arrow Keys - Move  |  Z/X - Dig  |  J - Debug', {
+      fontSize: '16px',
       color: '#cccccc',
       fontFamily: 'Arial, sans-serif'
-    }).setOrigin(1, 0);
-
-    this.add.text(GAME_CONFIG.width - padding, GAME_CONFIG.height - padding - 30, 
-      'Arrow Keys - Move', {
-      fontSize: '18px',
-      color: '#cccccc',
-      fontFamily: 'Arial, sans-serif'
-    }).setOrigin(1, 0);
+    });
   }
 
   private setupInput(): void {
