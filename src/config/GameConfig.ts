@@ -31,3 +31,21 @@ export const ASSET_KEYS = {
     GAME_OVER: 'game-over'
   }
 } as const;
+
+// Game mechanics constants - following GPT-5 suggestion to avoid magic numbers
+export const GAME_MECHANICS = {
+  HOLE_FILL_DELAY: 5000,           // 5 seconds for holes to fill
+  PLAYER_INVINCIBILITY_TIME: 2000,  // 2 seconds invincibility after respawn
+  EXIT_LADDER_FADE_DURATION: 2000,  // 2 seconds for exit ladder fade-in
+  GUARD_MOVEMENT_SPEED: 60,         // Guard movement speed
+  PLAYER_MOVEMENT_SPEED: 100,       // Player movement speed
+  GRAVITY: 800,                     // Gravity force
+  TILE_TYPES: {
+    EMPTY: 0,
+    BRICK: 1,      // Diggable
+    SOLID: 2,      // Non-diggable
+    LADDER: 3,
+    ROPE: 4,
+    CONCRETE: 5    // Non-diggable
+  }
+} as const;
