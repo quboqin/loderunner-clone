@@ -24,6 +24,7 @@ export class GameScene extends Scene {
   private exitLadderPosition: {x: number, y: number} | null = null;
   private allSPositions: {x: number, y: number}[] = [];
   private exitLadderSprites: Phaser.GameObjects.Sprite[] = [];
+  private exitMarker: Phaser.GameObjects.Text | null = null;
   private holes!: Map<string, HoleData>;
   private levelTiles!: Map<string, Phaser.GameObjects.Sprite>;
   private guards: Guard[] = [];
@@ -34,6 +35,7 @@ export class GameScene extends Scene {
   private debugMode = false;
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private debugText!: Phaser.GameObjects.Text;
+  private levelCompleting = false;
 
   constructor() {
     super({ key: SCENE_KEYS.GAME });
@@ -122,6 +124,15 @@ export class GameScene extends Scene {
     // Initialize invincibility state
     this.playerInvincible = false;
     this.invincibilityEndTime = 0;
+
+    // Reset exit state to avoid carry-over across restarts
+    if (this.exitMarker) {
+      try { this.exitMarker.destroy(); } catch {}
+      this.exitMarker = null;
+    }
+    this.exitLadderSprites = [];
+    this.exitLadderPosition = null;
+    this.levelCompleting = false;
   }
 
   private createLevel(): void {
@@ -690,6 +701,9 @@ export class GameScene extends Scene {
         ease: 'Power2'
       });
     });
+    
+    // Create exit marker at the highest accessible position
+    this.createExitMarker();
 
     // Play special sound effect
     this.soundManager.playSFX('pass'); // Using existing 'pass' sound
@@ -872,6 +886,9 @@ export class GameScene extends Scene {
       return;
     }
     
+    // Check if player is trapped in the hole before it fills
+    this.checkPlayerTrappedInHole(gridX, gridY);
+    
     // Check if any guards can escape before hole fills
     this.checkGuardEscapeBeforeHoleFills(holeKey);
     
@@ -996,13 +1013,19 @@ export class GameScene extends Scene {
   }
 
   private checkExitLadderCompletion(): void {
-    // Debug logging
-    if (this.gameState.goldCollected >= this.gameState.totalGold) {
-      GameLogger.debug(`Level completion check: ExitSprites: ${this.exitLadderSprites.length}, FirstVisible: ${this.exitLadderSprites[0]?.visible}, GoldCollected: ${this.gameState.goldCollected}/${this.gameState.totalGold}`);
+    // Early return if already completing to prevent double completion
+    if (this.levelCompleting) {
+      return;
     }
     
-    // Only check if exit ladder sprites exist and are visible (all gold collected)
-    if (this.exitLadderSprites.length === 0 || !this.exitLadderSprites[0].visible) {
+    // Don't check completion if all gold hasn't been collected yet
+    if (this.gameState.goldCollected < this.gameState.totalGold) {
+      return;
+    }
+    
+    // Only check if exit ladder sprites exist and are actually visible (alpha > 0)
+    // Exit ladders use alpha for visibility, not the visible property
+    if (this.exitLadderSprites.length === 0 || !this.exitLadderSprites[0] || this.exitLadderSprites[0].alpha <= 0) {
       return;
     }
 
@@ -1011,7 +1034,7 @@ export class GameScene extends Scene {
       return;
     }
 
-    // Check if player is at the top of the designated exit ladder
+    // Find the highest accessible position that becomes available due to the exit ladder
     const playerCenterX = this.player.sprite.x;
     const playerCenterY = this.player.sprite.y;
     const playerTileX = Math.floor(playerCenterX / GAME_CONFIG.tileSize);
@@ -1021,27 +1044,108 @@ export class GameScene extends Scene {
     const exitLadderTileX = this.exitLadderPosition.x / GAME_CONFIG.tileSize;
     const exitLadderTileY = this.exitLadderPosition.y / GAME_CONFIG.tileSize;
     
-    // Check if player is on the exit ladder tile
-    if (playerTileX === exitLadderTileX && playerTileY === exitLadderTileY) {
-      // Check if player is at the top of the ladder (within the upper portion of the tile)
-      const ladderPixelY = exitLadderTileY * GAME_CONFIG.tileSize;
-      const ladderTopThreshold = ladderPixelY + (GAME_CONFIG.tileSize * 0.8); // Top 80% of ladder tile (more lenient)
-      
-      GameLogger.debug(`Level completion check: On exit ladder! PlayerY: ${playerCenterY}, Threshold: ${ladderTopThreshold}`);
-      
-      if (playerCenterY <= ladderTopThreshold) {
-        LevelLogger.info('Level completed successfully!');
-        // Player reached the top of the exit ladder - complete level!
-        this.completeLevel();
-      }
+    // Find the highest accessible position above the exit ladder
+    const highestAccessibleY = this.findHighestAccessiblePosition(exitLadderTileX, exitLadderTileY);
+    
+    // Check if player is at the highest accessible position  
+    if (playerTileX === exitLadderTileX && playerTileY === highestAccessibleY) {
+      this.completeLevel();
     }
   }
 
-  private completeLevel(): void {
-    // Play level completion music
-    this.soundManager.playLevelComplete();
+  private findHighestAccessiblePosition(ladderX: number, ladderY: number): number {
+    // Start from the exit ladder position and move upward
+    // Find the highest position that becomes accessible due to this ladder
     
-    // Add level completion bonus
+    let highestY = ladderY; // Start at the ladder position
+    
+    // Move upward from the ladder position, checking each tile above
+    for (let y = ladderY - 1; y >= 0; y--) {
+      const tileKey = `${ladderX},${y}`;
+      const tile = this.levelTiles.get(tileKey);
+      
+      // If there's a solid tile (brick, wall, solid block), we can't go higher
+      if (tile && tile.getData('tileType')) {
+        const tileType = tile.getData('tileType');
+        if (tileType === 1 || tileType === 2 || tileType === 5) { // Brick, solid, or special solid
+          break; // Can't go through solid tiles
+        }
+      }
+      
+      // This position is accessible (empty space, ladder, or rope)
+      highestY = y;
+      
+      // If we reach the top of the level, stop
+      if (y === 0) {
+        break;
+      }
+    }
+    
+    GameLogger.debug(`Highest accessible position above exit ladder at (${ladderX}, ${ladderY}): (${ladderX}, ${highestY})`);
+    return highestY;
+  }
+
+  private createExitMarker(): void {
+    if (!this.exitLadderPosition) {
+      return;
+    }
+    
+    // Get exit ladder position and find highest accessible position
+    const exitLadderTileX = this.exitLadderPosition.x / GAME_CONFIG.tileSize;
+    const exitLadderTileY = this.exitLadderPosition.y / GAME_CONFIG.tileSize;
+    const highestAccessibleY = this.findHighestAccessiblePosition(exitLadderTileX, exitLadderTileY);
+    
+    // Calculate pixel position for the exit marker
+    const markerX = exitLadderTileX * GAME_CONFIG.tileSize + GAME_CONFIG.tileSize / 2;
+    const markerY = highestAccessibleY * GAME_CONFIG.tileSize + GAME_CONFIG.tileSize / 2;
+    
+    // Remove existing exit marker if any
+    if (this.exitMarker) {
+      this.exitMarker.destroy();
+    }
+    
+    // Create exit marker text
+    this.exitMarker = this.add.text(markerX, markerY, 'EXIT', {
+      fontSize: '16px',
+      color: '#FF0000',
+      fontFamily: 'Arial Black, sans-serif',
+      backgroundColor: '#FFFF00',
+      padding: { x: 4, y: 2 },
+      stroke: '#000000',
+      strokeThickness: 2
+    }).setOrigin(0.5).setDepth(300);
+    
+    // Add pulsing animation to make it more visible
+    this.tweens.add({
+      targets: this.exitMarker,
+      alpha: 0.5,
+      duration: 800,
+      ease: 'Power2',
+      yoyo: true,
+      repeat: -1
+    });
+    
+    GameLogger.debug(`Exit marker created at position (${markerX}, ${markerY}) for tile (${exitLadderTileX}, ${highestAccessibleY})`);
+  }
+
+  private completeLevel(): void {
+    if (this.levelCompleting) {
+      return;
+    }
+    this.levelCompleting = true;
+
+    // Clean up exit marker
+    if (this.exitMarker) {
+      this.exitMarker.destroy();
+      this.exitMarker = null;
+    }
+    
+    // Play level completion music (safe)
+    try {
+      this.soundManager.playLevelComplete();
+    } catch {}
+    
+    // Add level completion bonus once
     this.gameState.score += 1000;
     
     // Show level complete message
@@ -1056,10 +1160,18 @@ export class GameScene extends Scene {
       strokeThickness: 4
     }).setOrigin(0.5);
 
-    // Transition to next level or game complete after delay
-    this.time.delayedCall(3000, () => {
-      completeText.destroy();
+    // Proceed to next level after showing message
+    const proceed = () => {
+      try { completeText.destroy(); } catch {}
       this.loadNextLevel();
+    };
+
+    // Primary delay and fallback to ensure transition
+    this.time.delayedCall(1200, proceed);
+    this.time.delayedCall(3000, () => {
+      if (this.levelCompleting) {
+        proceed();
+      }
     });
   }
 
@@ -1074,8 +1186,9 @@ export class GameScene extends Scene {
       this.gameState.currentLevel = 1;
     }
     
-    // Restart scene with new level
+    // Restart scene with new level and reset completion flag immediately
     this.scene.restart();
+    this.levelCompleting = false;
   }
 
   private toggleDebugMode(): void {
@@ -1291,6 +1404,18 @@ export class GameScene extends Scene {
     this.player.activateInvincibility(2000); // Use Player entity's invincibility system
     
     GameLogger.debug('Startup invincibility activated for 2 seconds');
+  }
+
+  private checkPlayerTrappedInHole(gridX: number, gridY: number): void {
+    // Check if player is in the same grid position as the hole that's about to fill
+    const playerX = Math.floor(this.player.sprite.x / GAME_CONFIG.tileSize);
+    const playerY = Math.floor(this.player.sprite.y / GAME_CONFIG.tileSize);
+    
+    if (playerX === gridX && playerY === gridY) {
+      // Player is trapped in the hole that's filling - kill player
+      GameLogger.debug(`Player trapped in filling hole at (${gridX}, ${gridY}) - triggering death`);
+      this.handlePlayerDeath();
+    }
   }
 
   private checkGuardEscapeBeforeHoleFills(holeKey: string): void {

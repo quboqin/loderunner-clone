@@ -357,3 +357,18 @@ Refer to the Phaser architecture and the previous document ARCHITECTURE_REVIEW.m
 For now, there is no need for the System Architecture and I don't need Claude Opus for the time being
 
 I asked cursor-agent to use GPT-5 to modify some content for me. Please take a look again to see if the modifications are reasonable.
+
+41. Some Guard behaviors to be corrected
+1. If the Player is in the hole (if it can't pass through the Hole), when the Hole is filled in, the Player will be killed and then respawn at the initial position.
+
+2. When the hidden ladder appears, the position where the game successfully ends is not the topmost step of the hidden ladder, but the highest square that was originally inaccessible in the entire game and can now be reached due to the appearance of the hidden ladder.
+
+After the hidden ladder appears, mark the position of the exit on the screen.
+
+Level 2, I reached the Exit, but the game didn't end.![alt text](<screenshots/Screenshot 2025-08-11 at 1.09.22 PM.png>)
+
+I asked GPT-5 to try to help me solve this problem. It added some logs, and the result was like this, but the problem still wasn't solved.
+
+✅ LEVEL COMPLETE! Player reached exit position!                   Logger.ts:114 [LEVEL_LOADING] Level completed at highest accessible position (18,0)
+
+The logic is correct, but starting from Level 2, when entering a level, "LEVEL COMPLETE! Level" will also be output. There is a minor issue here. Optimize it, including removing unnecessary console logs.
