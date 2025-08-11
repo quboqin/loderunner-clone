@@ -301,13 +301,14 @@ export class Player extends BaseEntity {
   }
 
   // Climbing state setters (called from GameScene collision detection)
-  public setClimbableState(ladder: boolean, rope: boolean): void {
+  public setClimbableState(ladder: boolean, rope: boolean, ropeYPosition?: number): void {
     this.onLadder = ladder;
     this.onRope = rope;
     
     // Initialize rope Y lock when first touching rope
     if (rope && !this.wasOnRope) {
-      this.ropeY = this.sprite.y;
+      // Use the provided rope Y position (from rope tile) for perfect alignment
+      this.ropeY = ropeYPosition !== undefined ? ropeYPosition : this.sprite.y;
       this.logger.debug('Rope Y position locked at:', this.ropeY);
     }
   }

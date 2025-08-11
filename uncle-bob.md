@@ -379,3 +379,31 @@ The logic is correct, but starting from Level 2, when entering a level, "LEVEL C
 I mean to move this information outside the in-game playing area, not place it on top.
 
 43. I asked GPT-5 to give suggestions for architecture optimization again. Please take a look and see what can be adopted. Don't make it too complicated.
+
+## Day 8
+44. When the Guard falls into the Hole and is immobilized, the Player should pass by the Hole without falling in. Moreover, the Player should walk over the Guard's head without being caught.
+
+45. If the Guard falls into the Hole, it has time to climb out before the Hole closes. One can step on the heads of other Guards to climb up. 
+
+46. Sometimes the position of the Player on the Rope is not on the same horizontal Tile as the Rope.
+
+47. When the Guard is chasing the Player on the ladder and the Player is above, in most cases, the Guard will not go up to chase. If the Guard falls out of the Hole, it will also flash left and right in place and get stuck there. In conclusion, the AI strategy for the Guard to chase the Player needs to be optimized.
+
+48. When the Guard passes by the Gold, there is a certain probability that it will take the Gold and randomly place it in another location. If the Guard can only carry one Gold at a time.
+
+## Day 9
+49. Why can it be deployed on Netlify smoothly, but always fails when deployed on Vercel? It's still this problem.
+I checked the requests in the browser console's network section. The return code is 200, but the content is all index.html, so there was an error in parsing the json later.
+got these error
+```
+phaser-CAd4oSEJ.js:3410 Failed to process file: json "runner"
+......
+phaser-CAd4oSEJ.js:3557 Uncaught SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at initialize.onProcess (phaser-CAd4oSEJ.js:3557:549)
+    at initialize.nextFile (phaser-CAd4oSEJ.js:3422:5708)
+    at initialize.onLoad (phaser-CAd4oSEJ.js:3410:1877)
+```
+as a vercel-deployment-specialist find the reason
+
+50. The environment for automated testing didn't work out, and there are very few automated test scripts. as a phaser-testing-specialist, Check all configurations and re-plan the testing plan.

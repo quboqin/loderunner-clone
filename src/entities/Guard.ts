@@ -29,7 +29,7 @@ export class Guard extends BaseEntity {
   
   // Hole mechanics
   private holeTimer: number = 0;
-  private holeEscapeTime: number = 2500; // 2.5 seconds in hole before escaping (hole fills at 3s)
+  private holeEscapeTime: number = 8000; // 8 seconds in hole before escaping (hole fills at 5s, so guards usually climb out when hole fills)
   private currentHole: string | null = null;
   
   // Pathfinding
@@ -84,9 +84,15 @@ export class Guard extends BaseEntity {
     if (this.state === GuardState.IN_HOLE) {
       this.holeTimer += delta;
       if (this.holeTimer >= this.holeEscapeTime) {
+        this.logger.debug(`Guard auto-escaping after ${(this.holeTimer / 1000).toFixed(1)}s in hole`);
         this.escapeFromHole();
       }
       return; // Don't do other AI while in hole
+    }
+    
+    // Don't do AI while escaping from hole
+    if (this.state === GuardState.ESCAPING_HOLE) {
+      return;
     }
     
     // Make AI decisions periodically
@@ -107,7 +113,7 @@ export class Guard extends BaseEntity {
   }
   
   private makeAIDecision(): void {
-    if (this.state === GuardState.IN_HOLE || this.state === GuardState.REBORN) {
+    if (this.state === GuardState.IN_HOLE || this.state === GuardState.REBORN || this.state === GuardState.ESCAPING_HOLE) {
       return; // Don't make decisions in these states
     }
     
@@ -408,7 +414,8 @@ export class Guard extends BaseEntity {
         break;
         
       case GuardState.ESCAPING_HOLE:
-        // Escape animation/movement handled separately
+        // Maintain upward velocity while escaping - movement handled by executeHoleEscapeClimb()
+        body.setVelocityX(0); // No horizontal movement while climbing out
         break;
     }
   }
@@ -455,6 +462,10 @@ export class Guard extends BaseEntity {
         }
         break;
         
+      case GuardState.ESCAPING_HOLE:
+        this.sprite.anims.play('guard-climb', true);
+        break;
+        
       case GuardState.REBORN:
         this.sprite.anims.play('guard-reborn', true);
         break;
@@ -487,13 +498,44 @@ export class Guard extends BaseEntity {
   // Force guard to change direction (used for guard-to-guard collision)
   public forceDirection(direction: number): void {
     // Only change direction if not in special states
-    if (this.state !== GuardState.IN_HOLE && this.state !== GuardState.REBORN && this.state !== GuardState.CLIMBING) {
+    if (this.state !== GuardState.IN_HOLE && this.state !== GuardState.REBORN && 
+        this.state !== GuardState.CLIMBING && this.state !== GuardState.ESCAPING_HOLE) {
       this.lastDirection = direction;
       if (direction > 0) {
         this.setState(GuardState.RUNNING_RIGHT);
       } else {
         this.setState(GuardState.RUNNING_LEFT);
       }
+    }
+  }
+  
+  // Check if this guard can be stepped on by other guards for climbing out of holes
+  public canBeSteppedOn(): boolean {
+    return this.state === GuardState.IN_HOLE;
+  }
+  
+  // Help another guard climb out by providing a stepping platform
+  public helpGuardClimb(otherGuard: Guard): void {
+    if (this.state === GuardState.IN_HOLE && otherGuard.state === GuardState.IN_HOLE) {
+      // If both guards are in the same hole, the other guard can climb on this one
+      const guardDistance = Phaser.Geom.Point.Distance(
+        { x: this.sprite.x, y: this.sprite.y },
+        { x: otherGuard.sprite.x, y: otherGuard.sprite.y }
+      );
+      
+      if (guardDistance < 20) { // Close enough to help
+        this.logger.debug('Guard helping other guard climb out of hole');
+        otherGuard.executeAssistedClimb();
+      }
+    }
+  }
+  
+  // Execute climb out with help from another guard
+  private executeAssistedClimb(): void {
+    if (this.state === GuardState.IN_HOLE && this.holeTimer < this.holeEscapeTime) {
+      this.logger.debug('Guard climbing out with help from another guard');
+      this.setState(GuardState.ESCAPING_HOLE);
+      this.executeHoleEscapeClimb();
     }
   }
   
@@ -549,11 +591,11 @@ export class Guard extends BaseEntity {
   private escapeFromHole(): void {
     if (!this.currentHole) return;
     
+    this.logger.debug('Guard automatically escaping from hole due to timer');
     this.setState(GuardState.ESCAPING_HOLE);
     
-    // Move guard back to spawn position (simple approach)
-    // In a more complex implementation, this would find the nearest spawn point
-    this.respawnAtStart();
+    // Start climbing animation - guard will climb out over 0.5 seconds
+    this.executeHoleEscapeClimb();
   }
   
   // Check if guard can escape from hole (called when hole is about to fill)
@@ -564,16 +606,13 @@ export class Guard extends BaseEntity {
     
     // Guard has been in hole for less than the escape time - can escape
     if (this.holeTimer < this.holeEscapeTime) {
-      this.logger.debug(`Guard escaping hole after ${(this.holeTimer / 1000).toFixed(1)}s`);
-      this.setState(GuardState.IDLE);
-      this.currentHole = null;
-      this.holeTimer = 0;
+      this.logger.debug(`Guard climbing out of hole after ${(this.holeTimer / 1000).toFixed(1)}s`);
+      this.setState(GuardState.ESCAPING_HOLE);
       
-      // Restore normal physics
-      const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-      body.setGravityY(600);
+      // Start climbing animation - guard will climb out over 0.5 seconds
+      this.executeHoleEscapeClimb();
       
-      return true; // Successfully escaped
+      return true; // Successfully escaping
     }
     
     // Guard trapped too long - will be killed and respawn
@@ -583,6 +622,41 @@ export class Guard extends BaseEntity {
     this.respawnAtStart();
     
     return false; // Cannot escape, was trapped but now respawned
+  }
+  
+  // Execute climbing out of hole animation and movement
+  private executeHoleEscapeClimb(): void {
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    
+    // Set upward velocity to climb out
+    body.setVelocityY(-120); // Climb up speed
+    body.setVelocityX(0);    // No horizontal movement while climbing
+    body.setGravityY(0);     // No gravity while climbing out
+    
+    // Use climbing animation
+    this.sprite.anims.play('guard-climb', true);
+    
+    // After 0.5 seconds, complete the escape
+    this.scene.time.delayedCall(500, () => {
+      this.completeHoleEscape();
+    });
+  }
+  
+  // Complete the hole escape - restore normal state
+  private completeHoleEscape(): void {
+    this.logger.debug('Guard successfully climbed out of hole');
+    
+    // Clear hole state
+    this.currentHole = null;
+    this.holeTimer = 0;
+    
+    // Restore normal physics
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    body.setGravityY(600);
+    body.setVelocityY(0);
+    
+    // Return to normal state
+    this.setState(GuardState.IDLE);
   }
   
   // Respawn guard at starting position
@@ -621,8 +695,10 @@ export class Guard extends BaseEntity {
   
   // Check collision with player - only catch if on same horizontal plane
   public checkPlayerCollision(player: Phaser.GameObjects.Sprite): boolean {
-    if (this.state === GuardState.IN_HOLE || this.state === GuardState.REBORN) {
-      return false; // Can't collide in these states
+    if (this.state === GuardState.REBORN || 
+        this.state === GuardState.ESCAPING_HOLE ||
+        this.state === GuardState.IN_HOLE) {
+      return false; // Can't collide when respawning, escaping from hole, or in hole
     }
     
     const guardBounds = this.sprite.getBounds();

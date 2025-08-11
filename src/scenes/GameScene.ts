@@ -307,13 +307,31 @@ export class GameScene extends Scene {
   }
 
   private handleGuardToGuardCollision(guardA: Guard, guardB: Guard): void {
-    // Prevent guards from getting stuck by making them change direction when they collide
     const guardAState = guardA.getState();
     const guardBState = guardB.getState();
     
-    // Only handle collision if both guards are in moveable states
-    if (guardAState !== GuardState.IN_HOLE && guardAState !== GuardState.REBORN &&
-        guardBState !== GuardState.IN_HOLE && guardBState !== GuardState.REBORN) {
+    // Special handling for guards in holes - they can help each other climb out
+    if (guardAState === GuardState.IN_HOLE && guardBState === GuardState.IN_HOLE) {
+      // Both guards are in holes - one can help the other climb out
+      guardA.helpGuardClimb(guardB);
+      return;
+    }
+    
+    if (guardAState === GuardState.IN_HOLE) {
+      // Guard A is in hole - Guard B can help it climb out
+      guardB.helpGuardClimb(guardA);
+      return;
+    }
+    
+    if (guardBState === GuardState.IN_HOLE) {
+      // Guard B is in hole - Guard A can help it climb out  
+      guardA.helpGuardClimb(guardB);
+      return;
+    }
+    
+    // Normal collision handling for moveable guards
+    if (guardAState !== GuardState.REBORN && guardAState !== GuardState.ESCAPING_HOLE &&
+        guardBState !== GuardState.REBORN && guardBState !== GuardState.ESCAPING_HOLE) {
       
       // Calculate positions to determine who should go which way
       const guardAX = guardA.sprite.x;
@@ -556,6 +574,7 @@ export class GameScene extends Scene {
     // Rope detection - Use player center for consistent rope detection during movement
     const playerTileX = Math.floor(playerCenterX / GAME_CONFIG.tileSize);
     const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
+    let ropeY: number | undefined = undefined;
     
     // Don't detect rope if player is jumping from rope
     const jumpingFromRope = false;
@@ -569,6 +588,7 @@ export class GameScene extends Scene {
         // This ensures consistent detection during horizontal movement
         if (tileTileX === playerTileX && tileTileY === playerTileY) {
           onRope = true;
+          ropeY = tile.y; // Use the actual rope tile's Y position for proper alignment
           detectionResults.push('Center(R)');
         }
       });
@@ -585,12 +605,8 @@ export class GameScene extends Scene {
       detectionResults.push('RopePriority');
     }
     
-    // Update player data
-    this.player.setClimbableState(onLadder, onRope);
-    
-    // Initialize rope Y lock when first touching rope
-    // TODO: Fix rope detection - currently handled in Player entity
-    // TODO: Handle wasOnRope state in Player entity
+    // Update player data - pass rope Y position for proper alignment
+    this.player.setClimbableState(onLadder, onRope, ropeY);
   }
   
 
@@ -828,8 +844,8 @@ export class GameScene extends Scene {
     // Completely destroy the original tile to prevent visual artifacts
     originalTile.destroy();
     
-    // Set up regeneration timer (3 seconds)
-    const regenerationTimer = this.time.delayedCall(3000, () => {
+    // Set up regeneration timer (5 seconds - gives players more time to use guards as bridges)
+    const regenerationTimer = this.time.delayedCall(5000, () => {
       // Verify hole still exists before filling
       const currentHoleKey = `${gridX},${gridY}`;
       if (this.holes.has(currentHoleKey)) {
@@ -975,7 +991,19 @@ export class GameScene extends Scene {
     const hole = this.holes.get(holeKey);
     
     if (hole && !hole.isDigging) {
-      // Player is on a hole and not in digging animation - make them fall
+      // Check if hole contains any guards before making player fall
+      const guardsInHole = this.guards.filter(guard => 
+        guard.getCurrentHole() === holeKey && 
+        guard.getState() === GuardState.IN_HOLE
+      );
+      
+      if (guardsInHole.length > 0) {
+        // Hole contains guards - they act as a bridge, player can walk over safely
+        // Do not make player fall through hole with guards in it
+        return;
+      }
+      
+      // Hole is empty - proceed with normal falling logic
       const climbingState = this.player.getClimbingState();
       if (!climbingState.onLadder && !climbingState.onRope) {
         // Enable gravity to make player fall through the hole
@@ -991,7 +1019,18 @@ export class GameScene extends Scene {
     const belowHole = this.holes.get(belowHoleKey);
     
     if (belowHole && !belowHole.isDigging) {
-      // There's a hole below the player - they should fall through
+      // Check if hole below contains any guards before making player fall
+      const guardsInBelowHole = this.guards.filter(guard => 
+        guard.getCurrentHole() === belowHoleKey && 
+        guard.getState() === GuardState.IN_HOLE
+      );
+      
+      if (guardsInBelowHole.length > 0) {
+        // Hole below contains guards - they provide support, player doesn't fall
+        return;
+      }
+      
+      // Hole below is empty - player should fall through
       const climbingState = this.player.getClimbingState();
       if (!climbingState.onLadder && !climbingState.onRope) {
         // Check if player is close enough to the hole to fall through
