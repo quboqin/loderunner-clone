@@ -427,27 +427,6 @@ export class GameScene extends Scene {
   private setupInput(): void {
     // Initialize InputManager for centralized input handling
     this.inputManager = new InputManager(this);
-
-    // ESC key to return to menu
-    this.input.keyboard!.on('keydown-ESC', () => {
-      this.scene.start(SCENE_KEYS.MENU);
-    });
-
-    // Add digging controls
-    this.input.keyboard!.on('keydown-Z', () => {
-      this.player.digLeft();
-      this.digHole('left');
-    });
-
-    this.input.keyboard!.on('keydown-X', () => {
-      this.player.digRight();
-      this.digHole('right');
-    });
-
-    // Debug mode toggle (simple on/off)
-    this.input.keyboard!.on('keydown-J', () => {
-      this.toggleDebugMode();
-    });
   }
 
   private updateCounter = 0;
@@ -455,6 +434,9 @@ export class GameScene extends Scene {
   update(time: number, delta: number): void {
     try {
       this.updateCounter++;
+      
+      // Handle input through InputManager
+      this.handleInput();
       
       // Update Player entity
       this.player.update(time, delta);
@@ -469,6 +451,29 @@ export class GameScene extends Scene {
       }
     } catch (error) {
       // Handle error silently
+    }
+  }
+
+  private handleInput(): void {
+    // Handle ESC key - return to menu
+    if (this.inputManager.isEscapePressed()) {
+      this.scene.start(SCENE_KEYS.MENU);
+    }
+
+    // Handle digging controls
+    if (this.inputManager.isDigLeftPressed()) {
+      this.player.digLeft();
+      this.digHole('left');
+    }
+
+    if (this.inputManager.isDigRightPressed()) {
+      this.player.digRight();
+      this.digHole('right');
+    }
+
+    // Handle debug toggle
+    if (this.inputManager.isDebugTogglePressed()) {
+      this.toggleDebugMode();
     }
   }
 
@@ -577,57 +582,10 @@ export class GameScene extends Scene {
     this.player.setClimbableState(onLadder, onRope);
     
     // Initialize rope Y lock when first touching rope
-    // TODO: Fix rope detection - temporarily disabled
-    if (false) {
-      // Calculate proper rope hanging position
-      // Find the rope tile Y position and position player to hang from it
-      let ropeYPosition = this.player.sprite.y; // Default fallback
-      
-      this.ropeTiles.children.entries.forEach((tile: any) => {
-        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
-        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
-        
-        // Check if this is the rope tile the player is on
-        if (tileTileX === playerTileX && tileTileY === playerTileY) {
-          // Position player to hang from the rope tile
-          // Use rope tile center position for optimal hanging
-          ropeYPosition = tile.y; // Hang at rope center
-        }
-      });
-      
-      // TODO: Set rope Y position in Player entity
-      // Set position after detection to avoid disrupting rope state
-    }
+    // TODO: Fix rope detection - currently handled in Player entity
     // TODO: Handle wasOnRope state in Player entity
   }
   
-  private enforceRopeYLock(): void {
-    const onRope = this.player.getClimbingState('onRope');
-    const jumpingFromRope = false;
-    
-    // Don't enforce rope lock if jumping from rope
-    if (onRope && !jumpingFromRope) {
-      const lockedY = this.player.getClimbingState('ropeY');
-      const wasOnRope = this.player.getClimbingState('wasOnRope');
-      
-      if (lockedY !== undefined) {
-        // If just grabbed rope, set position immediately
-        if (onRope && !wasOnRope) {
-          this.player.sprite.setY(lockedY);
-        }
-        // Otherwise, enforce position if drifted
-        else if (Math.abs(this.player.sprite.y - lockedY) > 0.1) {
-          // Force position back to locked Y
-          this.player.sprite.setY(lockedY);
-          
-          // Also update the physics body position to prevent drift
-          const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
-          playerBody.y = lockedY - playerBody.height / 2 - playerBody.offset.y;
-        }
-      }
-    }
-  }
 
   private updateUI(): void {
     this.scoreText.setText(`SCORE: ${this.gameState.score}`);
@@ -767,8 +725,9 @@ export class GameScene extends Scene {
     let targetX = playerGridX + (direction === 'left' ? -1 : 1);
     let targetY = playerGridY + 1; // Dig one tile below and to the side
     
-    // Check if player is on solid ground (can't dig while falling)
-    if (!playerBody.onFloor() && !this.player.getClimbingState('onLadder')) {
+    // Check if player is on solid ground (can't dig while falling)  
+    const climbingState = this.player.getClimbingState();
+    if (!playerBody.onFloor() && !climbingState.onLadder) {
       return; // Can't dig while in mid-air
     }
     
@@ -1014,7 +973,8 @@ export class GameScene extends Scene {
     
     if (hole && !hole.isDigging) {
       // Player is on a hole and not in digging animation - make them fall
-      if (!this.player.getClimbingState('onLadder') && !this.player.getClimbingState('onRope')) {
+      const climbingState = this.player.getClimbingState();
+      if (!climbingState.onLadder && !climbingState.onRope) {
         // Enable gravity to make player fall through the hole
         if (playerBody.gravity.y === 0) {
           playerBody.setGravityY(800);
@@ -1029,7 +989,8 @@ export class GameScene extends Scene {
     
     if (belowHole && !belowHole.isDigging) {
       // There's a hole below the player - they should fall through
-      if (!this.player.getClimbingState('onLadder') && !this.player.getClimbingState('onRope')) {
+      const climbingState = this.player.getClimbingState();
+      if (!climbingState.onLadder && !climbingState.onRope) {
         // Check if player is close enough to the hole to fall through
         const playerBottom = playerBody.y + playerBody.height;
         const holeTop = belowHole.sprite.y - (belowHole.sprite.displayHeight / 2);
@@ -1195,21 +1156,15 @@ export class GameScene extends Scene {
   }
 
   private updateDebugText(playerBody: Phaser.Physics.Arcade.Body, bodyCenterX: number, bodyCenterY: number): void {
-    const onLadder = this.player.getClimbingState('onLadder');
-    const onRope = this.player.getClimbingState('onRope');
-    const isClimbing = onLadder || onRope;
+    const climbingState = this.player.getClimbingState();
+    const isClimbing = climbingState.onLadder || climbingState.onRope;
     
     // Calculate current tile position
     const tileX = Math.floor(this.player.sprite.x / GAME_CONFIG.tileSize);
     const tileY = Math.floor(this.player.sprite.y / GAME_CONFIG.tileSize);
     
-    // Track position changes for debugging sliding
-    const prevX = this.player.getClimbingState('prevX') || this.player.sprite.x;
-    const prevY = this.player.getClimbingState('prevY') || this.player.sprite.y;
-    const positionDelta = {
-      x: this.player.sprite.x - prevX,
-      y: this.player.sprite.y - prevY
-    };
+    // Track position changes for debugging sliding (simplified)
+    const positionDelta = { x: 0, y: 0 };
     
     // Store current position for next frame comparison
     // TODO: Track previous position in Player entity if needed
@@ -1237,8 +1192,8 @@ export class GameScene extends Scene {
       `Blocked: ${JSON.stringify(playerBody.blocked)}`,
       '',
       '=== CLIMBING STATE ===',
-      `On Ladder: ${onLadder ? '✓' : '✗'}`,
-      `On Rope: ${onRope ? '✓' : '✗'}`,
+      `On Ladder: ${climbingState.onLadder ? '✓' : '✗'}`,
+      `On Rope: ${climbingState.onRope ? '✓' : '✗'}`,
       `Is Climbing: ${isClimbing ? '✓' : '✗'}`,
       `Gravity Disabled: ${playerBody.gravity.y === 0 ? '✓' : '✗'}`,
       `Detection Points: ${this.player.getDetectionResults()?.join(', ') || 'None'}`,

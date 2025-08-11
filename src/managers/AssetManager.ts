@@ -1,3 +1,5 @@
+import { Logger, LogCategory } from '@/utils/Logger';
+
 export class AssetManager {
   private static instance: AssetManager;
   private loadedAssets: Map<string, any> = new Map();
@@ -156,7 +158,7 @@ export class AssetManager {
         resolve();
       });
       scene.load.once(`loaderror`, () => {
-        console.warn(`Failed to load spritesheet: ${key}`);
+        Logger.warn(LogCategory.AUDIO, `Failed to load spritesheet: ${key}`);
         reject(new Error(`Failed to load ${key}`));
       });
     });
@@ -170,7 +172,7 @@ export class AssetManager {
         resolve();
       });
       scene.load.once(`loaderror`, () => {
-        console.warn(`Failed to load image: ${key}`);
+        Logger.warn(LogCategory.AUDIO, `Failed to load image: ${key}`);
         reject(new Error(`Failed to load ${key}`));
       });
     });
@@ -184,7 +186,7 @@ export class AssetManager {
         resolve();
       });
       scene.load.once(`loaderror`, () => {
-        console.warn(`Failed to load audio: ${key}`);
+        Logger.warn(LogCategory.AUDIO, `Failed to load audio: ${key}`);
         reject(new Error(`Failed to load ${key}`));
       });
     });

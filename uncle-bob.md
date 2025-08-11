@@ -352,3 +352,6 @@ I think there is a problem with the rewrites rules， As a vercel-deployment-spe
 
 Refer to the Phaser architecture and the previous document ARCHITECTURE_REVIEW.md, conduct an in - think hrader again, modify ARCHITECTURE_REVIEW.md, and then come up with the subsequent actions. The first step of the action is to clean up unnecessary console logs.
 
+40. Continue with the optimizations mentioned in ARCHITECTURE_REVIEW.md. First, check which ones have been done and which ones haven't. Finish cleaning up the code, formulate the next action plan, and confirm with me first.
+
+For now, there is no need for the System Architecture and I don't need Claude Opus for the time being

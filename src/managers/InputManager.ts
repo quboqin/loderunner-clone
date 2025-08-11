@@ -16,7 +16,7 @@ export class InputManager {
     
     this.wasdKeys = this.scene.input.keyboard!.addKeys('W,S,A,D') as { [key: string]: Phaser.Input.Keyboard.Key };
     
-    this.actionKeys = this.scene.input.keyboard!.addKeys('Z,X,SPACE,ESC,ENTER') as { [key: string]: Phaser.Input.Keyboard.Key };
+    this.actionKeys = this.scene.input.keyboard!.addKeys('Z,X,SPACE,ESC,ENTER,J') as { [key: string]: Phaser.Input.Keyboard.Key };
   }
 
   isLeftPressed(): boolean {
@@ -50,6 +50,10 @@ export class InputManager {
 
   isEscapePressed(): boolean {
     return Phaser.Input.Keyboard.JustDown(this.actionKeys.ESC);
+  }
+
+  isDebugTogglePressed(): boolean {
+    return Phaser.Input.Keyboard.JustDown(this.actionKeys.J);
   }
 
   destroy(): void {
