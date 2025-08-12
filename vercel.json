@@ -21,7 +21,7 @@
   ],
   "rewrites": [
     {
-      "source": "/:path((?!assets/).*)",
+      "source": "/((?!assets).*)",
       "destination": "/index.html"
     }
   ]
