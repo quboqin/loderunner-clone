@@ -418,6 +418,7 @@ I didn't see the Guard trying to climb out of the Hole
 45. Implement this feature first: If the Guard falls into the Hole, it has time to climb out before the Hole closes. But the actual situation is that I haven't seen guard climb out. One can step on the heads of other Guards to climb up. 
 
 46. Sometimes the position of the Player on the Rope is not on the same horizontal Tile as the Rope.
+Sometimes the position of the Guard on the Rope is not on the same horizontal Tile as the Rope.
 
 47. When the Guard is chasing the Player on the ladder and the Player is above, in most cases, the Guard will not go up to chase. If the Guard falls out of the Hole, it will also flash left and right in place and get stuck there. In conclusion, the AI strategy for the Guard to chase the Player needs to be optimized.
 

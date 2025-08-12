@@ -192,10 +192,10 @@ export class GameScene extends Scene {
   private initializeDebug(): void {
     // Create debug graphics for visual overlays
     this.debugGraphics = this.add.graphics();
-    this.debugGraphics.setDepth(1000); // Render on top of everything
+    this.debugGraphics.setDepth(GAME_MECHANICS.DEPTHS.DEBUG_GRAPHICS); // Render on top of everything
     
     // Create debug text display
-    this.debugText = this.add.text(10, 100, '', {
+    this.debugText = this.add.text(GAME_MECHANICS.UI.DEBUG_TEXT_X, GAME_MECHANICS.UI.DEBUG_TEXT_Y, '', {
       fontSize: '14px',
       color: '#00ff00',
       fontFamily: 'monospace',
@@ -292,7 +292,7 @@ export class GameScene extends Scene {
       const gold = this.add.sprite(goldPos.x + 16, goldPos.y + 16, 'tiles', 'gold');
       gold.setScale(1.6); // Keep scaling for gold to match tile size
       gold.setData('type', 'gold');
-      gold.setDepth(200); // Ensure gold renders above background elements
+      gold.setDepth(GAME_MECHANICS.DEPTHS.GOLD); // Ensure gold renders above background elements
       
       // Add physics body for collision detection
       this.physics.add.existing(gold, true); // true = static body
@@ -337,7 +337,7 @@ export class GameScene extends Scene {
       case 5: // Solid block (@) - solid collision, cannot be dug
         this.physics.add.existing(tile, true); // true = static body
         this.solidTiles.add(tile);
-        tile.setDepth(10); // Standard tile depth
+        tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_STANDARD); // Standard tile depth
         break;
       
       case 3: // Ladder - climbable with platform-style collision (solid from top)
@@ -345,13 +345,13 @@ export class GameScene extends Scene {
         this.ladderTiles.add(tile);
         // Also add to solid tiles for top collision support
         this.solidTiles.add(tile);
-        tile.setDepth(100); // Higher depth to render above holes
+        tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_ABOVE_HOLE); // Higher depth to render above holes
         break;
         
       case 4: // Rope - climbable, no solid collision
         this.physics.add.existing(tile, true);
         this.ropeTiles.add(tile);
-        tile.setDepth(100); // Higher depth to render above holes
+        tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_ABOVE_HOLE); // Higher depth to render above holes
         break;
         
     }
@@ -1007,7 +1007,7 @@ export class GameScene extends Scene {
     // Log only first few hole creations
     if (this.debugLogCount < this.maxDebugLogs) {
       this.debugLogCount++;
-      console.log(`[HOLE CREATE] Hole ${holeKey} created:
+      GameLogger.debug(`[HOLE CREATE] Hole ${holeKey} created:
         - Creation time (t1): ${currentTime}
         - Duration (n): ${GAME_MECHANICS.HOLE_DURATION}
         - Close time (t2): ${timeline.t2}
@@ -1585,7 +1585,7 @@ export class GameScene extends Scene {
               const shouldDie = guard.shouldDieFromHole(timeline.t2);
               
               this.debugLogCount++;
-              console.log(`[RULE 7 DEBUG] Guard ${guard.getGuardId()} in hole ${holeKey}:
+              GameLogger.debug(`[RULE 7 DEBUG] Guard ${guard.getGuardId()} in hole ${holeKey}:
                 - Current time: ${currentTime}
                 - Fall time (tg1): ${guardFallTime}
                 - Stun end (tg1+m): ${stunEndTime}
@@ -1595,7 +1595,7 @@ export class GameScene extends Scene {
                 (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
             } else {
               this.debugLogCount++;
-              console.log(`[RULE 7 ERROR] Guard ${guard.getGuardId()} in hole ${holeKey} but NO TIMELINE FOUND!
+              GameLogger.warn(`[RULE 7 ERROR] Guard ${guard.getGuardId()} in hole ${holeKey} but NO TIMELINE FOUND!
                 (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
             }
           });
@@ -1619,7 +1619,7 @@ export class GameScene extends Scene {
           // Only kill guard if not already dying
           if (guard.getState() !== GuardState.REBORN) {
             // Always log deaths (they're critical and rare)
-            console.log(`[RULE 7 DEATH] Killing guard ${guard.getGuardId()} in hole ${holeKey}`);
+            GameLogger.debug(`[RULE 7 DEATH] Killing guard ${guard.getGuardId()} in hole ${holeKey}`);
             
             // Remove guard from timeline tracking
             this.holeTimeline.removeGuardFromHole(holeKey, guard.getGuardId());
@@ -1639,7 +1639,7 @@ export class GameScene extends Scene {
         
         // Check if hole still exists and trigger fill
         if (this.holes.has(holeKey)) {
-          console.log(`[HOLE FILL SYNC] Triggering immediate hole fill for ${holeKey} at t2`);
+          GameLogger.debug(`[HOLE FILL SYNC] Triggering immediate hole fill for ${holeKey} at t2`);
           this.fillHole(gridX, gridY);
         }
       }
@@ -1671,7 +1671,7 @@ export class GameScene extends Scene {
           // Only log first few guard falls
           if (this.debugLogCount < this.maxDebugLogs) {
             this.debugLogCount++;
-            console.log(`[HOLE FALL] Guard ${guard.getGuardId()} falling into hole ${holeKey} at time ${currentTime}
+            GameLogger.debug(`[HOLE FALL] Guard ${guard.getGuardId()} falling into hole ${holeKey} at time ${currentTime}
               (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
           }
           
@@ -1679,7 +1679,7 @@ export class GameScene extends Scene {
           const holeTimeline = this.holeTimeline.getHoleTimeline(holeKey);
           if (!holeTimeline) {
             if (this.debugLogCount < this.maxDebugLogs) {
-              console.log(`[HOLE FALL ERROR] No timeline for hole ${holeKey} - creating fallback`);
+              GameLogger.warn(`[HOLE FALL ERROR] No timeline for hole ${holeKey} - creating fallback`);
             }
             // Create timeline for this hole if missing (fallback)
             this.holeTimeline.createHoleTimeline(holeKey, currentTime - 1000, GAME_MECHANICS.HOLE_DURATION);
@@ -1702,7 +1702,7 @@ export class GameScene extends Scene {
             if (timeline) {
               const guardRecoveryTime = currentTime + GAME_MECHANICS.GUARD_STUN_DURATION;
               const wouldDie = guardRecoveryTime >= timeline.t2;
-              console.log(`[RULE 7 CALC] Guard fall at ${currentTime}:
+              GameLogger.debug(`[RULE 7 CALC] Guard fall at ${currentTime}:
                 - Stun duration (m): ${GAME_MECHANICS.GUARD_STUN_DURATION}
                 - Recovery time (tg1+m): ${guardRecoveryTime}
                 - Hole close time (t2): ${timeline.t2}
@@ -1776,7 +1776,7 @@ export class GameScene extends Scene {
   }
 
   private checkGuardEscapeBeforeHoleFills(holeKey: string): void {
-    console.log(`[ESCAPE DEBUG] Checking guards in hole ${holeKey} before it fills`);
+    GameLogger.debug(`[ESCAPE DEBUG] Checking guards in hole ${holeKey} before it fills`);
     
     // Get the timeline data for this hole
     const timeline = this.holeTimeline.getHoleTimeline(holeKey);
@@ -1788,14 +1788,14 @@ export class GameScene extends Scene {
     });
     
     if (guardsInHole.length > 0) {
-      console.log(`[ESCAPE DEBUG] Found ${guardsInHole.length} guard(s) in hole ${holeKey} - giving them ONE LAST CHANCE to escape`);
+      GameLogger.debug(`[ESCAPE DEBUG] Found ${guardsInHole.length} guard(s) in hole ${holeKey} - giving them ONE LAST CHANCE to escape`);
       
       // Give guards ONE FINAL ESCAPE ATTEMPT before hole fills
       let escapedGuards = 0;
       
       guardsInHole.forEach((guard) => {
         const guardState = guard.getState();
-        console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} state: ${guardState}`);
+        GameLogger.debug(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} state: ${guardState}`);
         
         // Only try escape for guards that aren't already escaping
         if (guardState === GuardState.IN_HOLE || guardState === GuardState.STUNNED_IN_HOLE) {
@@ -1803,10 +1803,10 @@ export class GameScene extends Scene {
           const couldEscape = guard.attemptHoleEscape();
           
           if (couldEscape && guard.getState() === GuardState.ESCAPING_HOLE) {
-            console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} successfully started escape!`);
+            GameLogger.debug(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} successfully started escape!`);
             escapedGuards++;
           } else {
-            console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} could not escape - killing`);
+            GameLogger.debug(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} could not escape - killing`);
             
             // Remove from timeline tracking
             if (timeline) {
@@ -1820,7 +1820,7 @@ export class GameScene extends Scene {
       });
       
       if (escapedGuards > 0) {
-        console.log(`[ESCAPE DEBUG] ${escapedGuards} guard(s) started escaping from hole ${holeKey}`);
+        GameLogger.debug(`[ESCAPE DEBUG] ${escapedGuards} guard(s) started escaping from hole ${holeKey}`);
       }
     }
   }

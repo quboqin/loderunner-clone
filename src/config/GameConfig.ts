@@ -53,5 +53,40 @@ export const GAME_MECHANICS = {
     LADDER: 3,
     ROPE: 4,
     CONCRETE: 5    // Non-diggable
+  },
+  
+  // Rendering depth constants
+  DEPTHS: {
+    TILE_STANDARD: 10,
+    TILE_ABOVE_HOLE: 100,
+    GOLD: 200,
+    PLAYER: 1000,
+    DEBUG_GRAPHICS: 1000
+  },
+  
+  // Animation frame rates
+  ANIMATION_FPS: {
+    GUARD_SHAKE: 10,
+    HOLE_DIG: 10,
+    HOLE_FILL: 30
+  },
+  
+  // UI positioning constants  
+  UI: {
+    DEBUG_TEXT_X: 10,
+    DEBUG_TEXT_Y: 100,
+    GAME_OVER_SCORE_OFFSET_Y: 50,
+    GAME_OVER_SPACE_OFFSET_Y: 100,
+    INSTRUCTIONS_MODAL_PADDING: 100,
+    INSTRUCTIONS_TITLE_Y: 200,
+    INSTRUCTIONS_START_Y: 260,
+    INSTRUCTIONS_LINE_HEIGHT: 30
+  },
+  
+  // Timing delays
+  DELAYS: {
+    BOOT_SCENE: 1000,
+    PLAYER_RESPAWN: 100,
+    DIG_COMPLETE: 500
   }
 } as const;

@@ -8,6 +8,7 @@ import { PlayerState } from '@/types/GameTypes';
 import { InputManager } from '@/managers/InputManager';
 import { SoundManager } from '@/managers/SoundManager';
 import { LogCategory } from '@/utils/Logger';
+import { GAME_MECHANICS } from '@/config/GameConfig';
 
 export class Player extends BaseEntity {
   protected state: PlayerState = PlayerState.IDLE;
@@ -37,7 +38,7 @@ export class Player extends BaseEntity {
       texture: 'runner',
       frame: 'runner_00',
       scale: 1.6,
-      depth: 1000
+      depth: GAME_MECHANICS.DEPTHS.PLAYER
     };
     
     super(playerConfig, EntityType.PLAYER, LogCategory.PLAYER_MOVEMENT);
@@ -191,7 +192,7 @@ export class Player extends BaseEntity {
     
     // Set jumping flag to prevent rope re-detection
     this.jumpingFromRope = true;
-    this.scene.time.delayedCall(100, () => {
+    this.scene.time.delayedCall(GAME_MECHANICS.DELAYS.PLAYER_RESPAWN, () => {
       this.jumpingFromRope = false;
     });
     
@@ -320,7 +321,7 @@ export class Player extends BaseEntity {
       this.soundManager.playSFX('dig');
       
       // Return to idle after digging animation
-      this.scene.time.delayedCall(500, () => {
+      this.scene.time.delayedCall(GAME_MECHANICS.DELAYS.DIG_COMPLETE, () => {
         if (this.state === PlayerState.DIGGING_LEFT) {
           this.setState(PlayerState.IDLE);
         }
@@ -336,7 +337,7 @@ export class Player extends BaseEntity {
       this.soundManager.playSFX('dig');
       
       // Return to idle after digging animation
-      this.scene.time.delayedCall(500, () => {
+      this.scene.time.delayedCall(GAME_MECHANICS.DELAYS.DIG_COMPLETE, () => {
         if (this.state === PlayerState.DIGGING_RIGHT) {
           this.setState(PlayerState.IDLE);
         }

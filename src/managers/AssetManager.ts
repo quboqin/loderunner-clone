@@ -1,4 +1,5 @@
 import { Logger, LogCategory } from '@/utils/Logger';
+import { GAME_MECHANICS } from '@/config/GameConfig';
 
 export class AssetManager {
   private static instance: AssetManager;
@@ -112,8 +113,8 @@ export class AssetManager {
     createAnimation('guard-reborn', 'reborn', 4, 0);
     createAnimation('guard-fall-right', 'fallRight', 1, 0);
     createAnimation('guard-fall-left', 'fallLeft', 1, 0);
-    createAnimation('guard-shake-right', 'shakeRight', 10, 0);
-    createAnimation('guard-shake-left', 'shakeLeft', 10, 0);
+    createAnimation('guard-shake-right', 'shakeRight', GAME_MECHANICS.ANIMATION_FPS.GUARD_SHAKE, 0);
+    createAnimation('guard-shake-left', 'shakeLeft', GAME_MECHANICS.ANIMATION_FPS.GUARD_SHAKE, 0);
 
     // Guard idle animation (use first frame of runRight)
     scene.anims.create({
@@ -144,9 +145,9 @@ export class AssetManager {
     };
 
     // Create all hole animations from JSON
-    createAnimation('hole-dig-left', 'digHoleLeft', 10, 0);
-    createAnimation('hole-dig-right', 'digHoleRight', 10, 0);
-    createAnimation('hole-fill', 'fillHole', 30, 0); // Speed up fill animation from 4 to 30 FPS
+    createAnimation('hole-dig-left', 'digHoleLeft', GAME_MECHANICS.ANIMATION_FPS.HOLE_DIG, 0);
+    createAnimation('hole-dig-right', 'digHoleRight', GAME_MECHANICS.ANIMATION_FPS.HOLE_DIG, 0);
+    createAnimation('hole-fill', 'fillHole', GAME_MECHANICS.ANIMATION_FPS.HOLE_FILL, 0); // Speed up fill animation from 4 to 30 FPS
   }
 
   // Asset loading utilities for future integration with Roku repository
