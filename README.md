@@ -44,7 +44,7 @@ A fully functional web-based clone of the classic Lode Runner game, built entire
 - **Game Engine:** Phaser.js 3.85+
 - **Language:** TypeScript
 - **Build System:** Vite 6.0+
-- **Deployment:** Vercel + Netlify (dual-platform support)
+- **Deployment:** Netlify
 - **Development:** Claude Code (AI-assisted development)
 
 ## 🚀 Quick Start
@@ -82,9 +82,9 @@ npm run preview
 
 ## 🌐 Deployment
 
-This project supports deployment to both **Vercel** and **Netlify**:
+This project deploys to **Netlify**:
 
-### Netlify (Recommended)
+### Netlify
 ```bash
 # Install Netlify CLI
 npm i -g netlify-cli
@@ -93,17 +93,6 @@ npm i -g netlify-cli
 npm run build
 netlify deploy --prod --dir=dist
 ```
-
-### Vercel
-```bash
-# Install Vercel CLI  
-npm i -g vercel
-
-# Deploy
-vercel
-```
-
-**Note:** Netlify is recommended due to better static asset serving for game resources.
 
 ## 📁 Project Structure
 
@@ -128,7 +117,6 @@ loderunner-clone/
 │   │   └── PreloadScene.ts
 │   ├── config/          # Game configuration
 │   └── types/           # TypeScript definitions
-├── vercel.json          # Vercel deployment config
 ├── netlify.toml         # Netlify deployment config
 └── DEPLOYMENT.md        # Detailed deployment guide
 ```
@@ -176,7 +164,7 @@ This project was built using **Claude Code**, Anthropic's AI-powered development
 - Full collision and physics system
 - Multi-level progression
 - Audio/visual integration
-- Dual-platform deployment
+- Netlify deployment
 
 ### 🚧 Areas for Future Enhancement
 - **Enhanced Guard AI:** More sophisticated chasing strategies and behaviors

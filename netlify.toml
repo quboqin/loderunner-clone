@@ -13,7 +13,7 @@
   # Skip processing of JS/CSS for faster deploys
   skip_processing = false
 
-# Headers for static assets (similar to Vercel config)
+# Headers for static assets
 [[headers]]
   for = "/assets/*"
   [headers.values]

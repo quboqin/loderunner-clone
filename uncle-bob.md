@@ -439,4 +439,6 @@ phaser-CAd4oSEJ.js:3557 Uncaught SyntaxError: Unexpected token '<', "<!DOCTYPE "
 ```
 as a vercel-deployment-specialist find the reason
 
+Vercel is a terrifying platform. Delete all content related to Vercel and only keep Netlify.
+
 50. The environment for automated testing didn't work out, and there are very few automated test scripts. as a phaser-testing-specialist, Check all configurations and re-plan the testing plan.

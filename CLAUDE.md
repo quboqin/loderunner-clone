@@ -93,60 +93,11 @@ When integrating assets from the reference repository:
 
 - **Progress Tracking**: Use `PROJECT_PROGRESS.md` for development phase tracking and task management
 - **Sub-Agents**: Project Manager Agent and UX/Animation Specialist available in `.claude/agents/`
-- **Development Phases**: 9-phase structure from foundation through Vercel deployment
+- **Development Phases**: 9-phase structure from foundation through deployment
 
 ## Deployment Notes
 
-### Vercel Deployment (Primary)
-- **Configuration**: `vercel.json` - minimal configuration with Vite framework support
-- **Build Command**: `npm run build` (auto-detected)
-- **Output Directory**: `dist` (auto-detected)
-- **Deploy via CLI**: `npm i -g vercel && vercel`
-- **Key Settings**: Framework preset must be set to "Vite" in Vercel dashboard
-
-#### Critical Vercel Troubleshooting Experience
-**Common Issue**: Assets return HTML instead of actual files (JSON works, PNG/WAV return HTML)
-
-**Root Cause**: Vercel build cache problems, not configuration issues
-
-**Solution Steps**:
-1. **First**: Clear build cache in Vercel Dashboard:
-   - Go to Deployments → Latest deployment → "..." menu
-   - Select "Redeploy" 
-   - **Uncheck** "Use existing Build Cache"
-   - Click Redeploy
-
-2. **Verify Dashboard Settings**:
-   - Framework Preset: `Vite`
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-   - Root Directory: (leave empty)
-
-3. **Minimal Working Configuration**:
-   ```json
-   {
-     "framework": "vite",
-     "headers": [
-       {
-         "source": "/assets/(.*)",
-         "headers": [
-           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-         ]
-       }
-     ],
-     "rewrites": [
-       { "source": "/((?!assets/).*)", "destination": "/index.html" }
-     ]
-   }
-   ```
-
-**Lessons Learned**:
-- Vercel's aggressive build caching can preserve old/broken configurations
-- Always clear cache when troubleshooting deployment issues
-- Framework-specific presets (Vite) handle most configuration automatically
-- Over-configuration often causes more problems than under-configuration
-
-### Netlify Deployment (Alternative)
+### Netlify Deployment
 - **Configuration**: `netlify.toml` + `public/_redirects`
 - **Build Command**: `npm run build`
 - **Output Directory**: `dist`
@@ -169,12 +120,6 @@ Game assets are served from `public/` directory:
 
 ### Deployment Troubleshooting
 
-#### Vercel-Specific Issues
-- **Assets return HTML instead of files**: 
-  - **Primary Solution**: Clear build cache (see troubleshooting steps above)
-  - **Secondary**: Check Framework Preset is set to "Vite"
-  - **Verify**: Test URLs directly: `/assets/sprites/runner.png` should return PNG data, not HTML
-
 #### General Issues  
 - **JSON served as HTML**: Check SPA routing rules aren't catching asset requests
 - **404 on refresh**: Ensure proper SPA redirect rules are configured
@@ -184,8 +129,8 @@ Game assets are served from `public/` directory:
 #### Debugging Commands
 ```bash
 # Test asset loading directly
-curl -I https://your-app.vercel.app/assets/sprites/runner.png
-curl -I https://your-app.vercel.app/assets/audio/dig.wav
+curl -I https://your-app.netlify.app/assets/sprites/runner.png
+curl -I https://your-app.netlify.app/assets/audio/dig.wav
 
 # Check build output locally
 ls -la dist/assets/
