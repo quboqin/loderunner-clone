@@ -37,7 +37,6 @@ export class Guard extends BaseEntity {
   private currentHole: string | null = null;
   private fallTime: number = 0; // tg1: Time when guard fell into hole
   private stunEndTime: number = 0; // tg1 + m: When guard can start climbing
-  private escapeTargetPosition: { x: number, y: number } | null = null; // Target position for hole escape
   private escapeTimer: Phaser.Time.TimerEvent | null = null; // Timer for escape completion
   private isStunned: boolean = false; // Whether guard is in mandatory stun period
   
@@ -151,11 +150,8 @@ export class Guard extends BaseEntity {
       return;
     }
     
-    // Safety check: If guard has currentHole set but wrong state, fix it
-    if (this.currentHole && 
-        this.state !== GuardState.IN_HOLE && 
-        this.state !== GuardState.STUNNED_IN_HOLE && 
-        this.state !== GuardState.ESCAPING_HOLE) {
+    // Safety check: If guard has currentHole set but not in a hole state, fix it
+    if (this.currentHole) {
       console.log(`[ESCAPE DEBUG] Guard ${this.guardId} has currentHole=${this.currentHole} but state=${this.state} - clearing hole reference`);
       this.currentHole = null;
       this.fallTime = 0;
@@ -530,8 +526,8 @@ export class Guard extends BaseEntity {
         break;
         
       case GuardState.ESCAPING_HOLE:
-        // Maintain upward velocity while escaping - movement handled by executeHoleEscapeClimb()
-        body.setVelocityX(0); // No horizontal movement while climbing out
+        // Movement is handled by executeClimbValidationEscape
+        // Don't interfere with the escape velocity
         break;
     }
   }
@@ -1095,9 +1091,6 @@ export class Guard extends BaseEntity {
     // Use climbing animation
     this.sprite.anims.play('guard-climb', true);
     
-    // Store target position for completion
-    this.escapeTargetPosition = { x: targetX, y: targetY };
-    
     // Complete escape after reaching exit point
     const climbDuration = Math.max(500, Math.abs(deltaY) * 6); // Faster climb
     console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Climb duration: ${climbDuration}ms`);
@@ -1209,43 +1202,12 @@ export class Guard extends BaseEntity {
       return true; // Not in hole, so no problem
     }
     
-    // Call new escape method
+    // Call new escape method which may change state to ESCAPING_HOLE
     this.attemptHoleEscapeInternal(this.scene.time.now);
     
-    // Return based on current state
-    return this.state === GuardState.ESCAPING_HOLE;
-  }
-  
-  // Execute climbing out of hole animation and movement
-  private executeHoleEscapeClimb(): void {
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    
-    this.logger.debug(`Guard starting hole escape climb from position Y: ${this.sprite.y.toFixed(1)}`);
-    
-    // Set upward velocity to climb out (slower for more visible climbing)
-    body.setVelocityY(-80); // Slower climb speed for better visibility
-    body.setVelocityX(0);   // No horizontal movement while climbing
-    body.setGravityY(0);    // No gravity while climbing out
-    
-    // Use climbing animation
-    this.sprite.anims.play('guard-climb', true);
-    
-    // Add intermediate position update for smoother climbing
-    const climbTimer = this.scene.time.addEvent({
-      delay: 100, // Update every 100ms
-      repeat: 9,  // 10 updates over 1 second
-      callback: () => {
-        this.logger.debug(`Guard climbing - Y position: ${this.sprite.y.toFixed(1)}`);
-      }
-    });
-    
-    // After 1 second (extended from 0.5s), complete the escape
-    this.scene.time.delayedCall(1000, () => {
-      if (climbTimer) {
-        climbTimer.destroy();
-      }
-      this.completeHoleEscape();
-    });
+    // Check if escape was initiated (state may have changed to ESCAPING_HOLE)
+    // Use type assertion since TypeScript doesn't track side effects
+    return (this.state as GuardState) === GuardState.ESCAPING_HOLE;
   }
   
   // Complete the hole escape - restore normal state
@@ -1255,7 +1217,6 @@ export class Guard extends BaseEntity {
     // Clear hole state
     this.currentHole = null;
     this.holeTimer = 0;
-    this.escapeTargetPosition = null;
     this.fallTime = 0;
     this.stunEndTime = 0;
     
