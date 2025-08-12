@@ -381,9 +381,41 @@ I mean to move this information outside the in-game playing area, not place it o
 43. I asked GPT-5 to give suggestions for architecture optimization again. Please take a look and see what can be adopted. Don't make it too complicated.
 
 ## Day 8
+Redesign the collision logic of Hole, Guard and Player according to the Rules and Timeline.
+1. The Player can dig a Hole in the BRICK, and the starting time is assumed to be t1.
+2. The Hole will close and revert to a BRICK after n seconds, so the end time of the Hole, t2 = t1 + n.
+3. Both the Player and the Guard will fall into the Hole. If there are multiple Holes together, they can move left or right. If there is another Hole on the lower layer, they can continue to fall.
+4. The Player cannot climb out after falling in.
+5. If the Hole where the Guard is located is on the Y - layer at the Tile granularity, and the coordinates are (X, Y), if the positions (X + 1, Y - 1) or (X - 1, Y - 1) on the Y - 1 layer can be stood on, the Guard can climb up.
+6. The Guard will be delayed for m seconds (fainting) after falling in before it can start climbing up.
+7. Assume the time when the Guard falls in is tg1, where t1 < tg1 < t2. If tg1 + m >= t2, the Guard will be killed and then respawn at the initial position after h seconds.
+8. The Guard that falls into the Hole can be regarded as a standable Tile. Both the Guard and the Player can stand on this Guard or walk over his head. When the Player is on top of him, the Player will not be caught. The Guard can also climb onto the head of another Guard.
+9. If there are multiple layers of Holes, follow the above rules. 
+
+I just tested it once, and it seems that none of the rules are correct. Think harder and double - check the logic.
+
+First, take a look at rule 8. This clearly hasn't been implemented.
+
+Sometimes the Guard falls into the hole and disappears directly, but doesn't respawn.
+Most of the time, like in the picture, it gets stuck there and isn't killed.![alt text](<screenshots/Screenshot 2025-08-12 at 11.43.34 AM.png>)
+
+`change model from sonic to OPUS'
+
+Still stuck in the Hole, like in the picture, it gets stuck there and isn't killed.![alt text](<screenshots/Screenshot 2025-08-12 at 11.43.34 AM.png>), think harder
+
+There are too many console logs. Once some logs are captured, stop outputting logs.
+
+There has been progress, but there are still issues. The guard was indeed killed and respawned, but the hole was still there (it shouldn't have been there). The hole was filled only after the guard respawned (it should have been filled at the same time the guard was killed). *ultra think*
+
+The Hole still turns into a Brick only after the Guard is killed and respawns.
+
+When the Guard comes down from the ladder, it will get stuck on the bottom - most rung of the ladder and no longer chase the player.
+
+I didn't see the Guard trying to climb out of the Hole
+
 44. When the Guard falls into the Hole and is immobilized, the Player should pass by the Hole without falling in. Moreover, the Player should walk over the Guard's head without being caught.
 
-45. If the Guard falls into the Hole, it has time to climb out before the Hole closes. One can step on the heads of other Guards to climb up. 
+45. Implement this feature first: If the Guard falls into the Hole, it has time to climb out before the Hole closes. But the actual situation is that I haven't seen guard climb out. One can step on the heads of other Guards to climb up. 
 
 46. Sometimes the position of the Player on the Rope is not on the same horizontal Tile as the Rope.
 

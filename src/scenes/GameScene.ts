@@ -1,5 +1,5 @@
 import { Scene } from 'phaser';
-import { SCENE_KEYS, GAME_CONFIG } from '@/config/GameConfig';
+import { SCENE_KEYS, GAME_CONFIG, GAME_MECHANICS } from '@/config/GameConfig';
 import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
@@ -7,6 +7,8 @@ import { InputManager } from '@/managers/InputManager';
 import { Guard, GuardState } from '@/entities/Guard';
 import { Player } from '@/entities/Player';
 import { GameLogger, LevelLogger, GuardLogger, PhysicsLogger } from '@/utils/Logger';
+import { HoleTimeline } from '@/utils/HoleTimeline';
+import { ClimbValidation, TileChecker } from '@/utils/ClimbValidation';
 
 export class GameScene extends Scene {
   private gameState!: GameState;
@@ -31,11 +33,20 @@ export class GameScene extends Scene {
   private playerInvincible: boolean = false;
   private invincibilityEndTime: number = 0;
   
+  // Timeline-based hole system (new rule implementation)
+  private holeTimeline!: HoleTimeline;
+  private climbValidation!: ClimbValidation; // Will be used for Rule 5 climb validation
+  
   // Debug visuals - simple on/off system
   private debugMode = false;
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private debugText!: Phaser.GameObjects.Text;
   private levelCompleting = false;
+  
+  // Debug logging control - capture first few instances then stop
+  private debugLogCount = 0;
+  private maxDebugLogs = 10; // Only log first 10 Rule 7 events
+  private lastDebugSecond = 0; // Track last second we logged
 
   constructor() {
     super({ key: SCENE_KEYS.GAME });
@@ -46,6 +57,7 @@ export class GameScene extends Scene {
     
     this.initializeGameState();
     this.initializeAudio();
+    this.initializeTimelineSystem(); // Initialize timeline-based hole mechanics
     this.setupInput(); // Initialize InputManager before creating Player
     this.createCollisionGroups();
     this.createLevel();
@@ -63,6 +75,118 @@ export class GameScene extends Scene {
   private initializeAudio(): void {
     this.soundManager = SoundManager.getInstance(this);
     this.soundManager.initializeSounds();
+  }
+
+  // Initialize timeline-based hole mechanics system
+  private initializeTimelineSystem(): void {
+    this.holeTimeline = new HoleTimeline();
+    
+    // Create TileChecker implementation for ClimbValidation
+    const tileChecker: TileChecker = {
+      isTileStandable: (gridX: number, gridY: number): boolean => {
+        return this.isTileStandable(gridX, gridY);
+      },
+      
+      isTileSolid: (gridX: number, gridY: number): boolean => {
+        return this.isTileSolid(gridX, gridY);
+      },
+      
+      getTileType: (gridX: number, gridY: number): number => {
+        return this.getTileType(gridX, gridY);
+      }
+    };
+    
+    this.climbValidation = new ClimbValidation(tileChecker);
+  }
+
+  // TileChecker implementation methods
+  private isTileStandable(gridX: number, gridY: number): boolean {
+    // A tile is standable if it's not solid and not in an active hole
+    const holeKey = `${gridX},${gridY}`;
+    if (this.holes.has(holeKey)) {
+      return false; // Position is a hole, not standable
+    }
+    
+    const tileType = this.getTileType(gridX, gridY);
+    return tileType === GAME_MECHANICS.TILE_TYPES.EMPTY || 
+           tileType === GAME_MECHANICS.TILE_TYPES.LADDER ||
+           tileType === GAME_MECHANICS.TILE_TYPES.ROPE;
+  }
+
+  private isTileSolid(gridX: number, gridY: number): boolean {
+    const tileType = this.getTileType(gridX, gridY);
+    return tileType === GAME_MECHANICS.TILE_TYPES.BRICK ||
+           tileType === GAME_MECHANICS.TILE_TYPES.SOLID ||
+           tileType === GAME_MECHANICS.TILE_TYPES.CONCRETE;
+  }
+
+  private getTileType(gridX: number, gridY: number): number {
+    const tileKey = `${gridX},${gridY}`;
+    const tile = this.levelTiles.get(tileKey);
+    
+    if (!tile) {
+      return GAME_MECHANICS.TILE_TYPES.EMPTY;
+    }
+
+    // Map sprite frames to tile types (this is a simplified mapping)
+    const frame = tile.frame.name;
+    if (frame.includes('brick')) return GAME_MECHANICS.TILE_TYPES.BRICK;
+    if (frame.includes('solid') || frame.includes('wall')) return GAME_MECHANICS.TILE_TYPES.SOLID;
+    if (frame.includes('ladder')) return GAME_MECHANICS.TILE_TYPES.LADDER;
+    if (frame.includes('rope')) return GAME_MECHANICS.TILE_TYPES.ROPE;
+    if (frame.includes('concrete')) return GAME_MECHANICS.TILE_TYPES.CONCRETE;
+    
+    return GAME_MECHANICS.TILE_TYPES.EMPTY;
+  }
+
+  // Rule 8: Handle player standing on guard platform
+  private handlePlayerOnGuardPlatform(): void {
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
+    
+    // Provide solid platform support
+    if (playerBody) {
+      // Stop vertical movement if falling onto platform
+      if (playerBody.velocity.y > 0) {
+        playerBody.setVelocityY(0);
+      }
+      
+      // Disable gravity while standing on guard platform
+      playerBody.setGravityY(0);
+      
+      // Ensure player doesn't sink through platform
+      playerBody.moves = true;
+      
+      // Debug logging
+      GameLogger.debug(`Player standing on guard platform - gravity disabled`);
+    }
+  }
+
+  // Rule 8: Check if player is still on guard platform and manage gravity accordingly
+  private updatePlayerGuardPlatformState(): void {
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
+    
+    if (!playerBody) {
+      return;
+    }
+
+    // Check if player is currently standing on any guard platform
+    const playerOnGuardPlatform = this.guards.some(guard => {
+      return guard.isEntityOnTop(this.player.sprite);
+    });
+
+    // Check player climbing state to avoid gravity conflicts
+    const climbingState = this.player.getClimbingState();
+    const isClimbing = climbingState.onLadder || climbingState.onRope;
+
+    if (playerOnGuardPlatform) {
+      // Player is on guard platform - handle platform physics
+      this.handlePlayerOnGuardPlatform();
+    } else if (!isClimbing && playerBody.gravity.y === 0) {
+      // Player not on platform and not climbing but has no gravity - restore it
+      // This handles the case where player moves off a guard platform
+      playerBody.setGravityY(800);
+      GameLogger.debug(`Player left guard platform - gravity restored`);
+    }
   }
 
   private initializeDebug(): void {
@@ -460,6 +584,16 @@ export class GameScene extends Scene {
     try {
       this.updateCounter++;
       
+      // CRITICAL FIX: Use this.time.now for consistent timing across all systems
+      const gameTime = this.time.now;
+      
+      // CRITICAL: Check guard deaths BEFORE updating timeline
+      // This ensures timeline data exists for death checks
+      this.checkTimelineBasedGuardDeaths(gameTime);
+      
+      // Now update timeline (which may delete expired holes)
+      this.holeTimeline.update(gameTime);
+      
       // Handle input through InputManager
       this.handleInput();
       
@@ -468,7 +602,7 @@ export class GameScene extends Scene {
       
       this.updateUI();
       this.updatePlayerState();
-      this.updateGuards(time, delta);
+      this.updateGuards(gameTime, delta);  // Use consistent gameTime
       this.checkGuardPlayerCollisions();
       
       if (this.debugMode) {
@@ -505,6 +639,9 @@ export class GameScene extends Scene {
   private updatePlayerState(): void {
     // Check ladder/rope state using continuous position-based detection
     this.updateClimbableState();
+    
+    // Rule 8: Check if player is still on guard platform, restore gravity if not
+    this.updatePlayerGuardPlatformState();
     
     // Check for holes player might fall through
     this.checkHoleCollisions();
@@ -800,6 +937,8 @@ export class GameScene extends Scene {
   }
 
   private createHole(gridX: number, gridY: number, direction: 'left' | 'right'): void {
+    const currentTime = this.time.now;
+    const holeKey = `${gridX},${gridY}`;
     const pixelX = gridX * GAME_CONFIG.tileSize + 16;
     const pixelY = gridY * GAME_CONFIG.tileSize + 16;
     
@@ -844,11 +983,23 @@ export class GameScene extends Scene {
     // Completely destroy the original tile to prevent visual artifacts
     originalTile.destroy();
     
-    // Set up regeneration timer (5 seconds - gives players more time to use guards as bridges)
-    const regenerationTimer = this.time.delayedCall(5000, () => {
+    // Create hole timeline entry (Rule 1: t1 = creation time, t2 = t1 + n)
+    const timeline = this.holeTimeline.createHoleTimeline(holeKey, currentTime, GAME_MECHANICS.HOLE_DURATION);
+    
+    // Log only first few hole creations
+    if (this.debugLogCount < this.maxDebugLogs) {
+      this.debugLogCount++;
+      console.log(`[HOLE CREATE] Hole ${holeKey} created:
+        - Creation time (t1): ${currentTime}
+        - Duration (n): ${GAME_MECHANICS.HOLE_DURATION}
+        - Close time (t2): ${timeline.t2}
+        (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
+    }
+    
+    // Set up regeneration timer using timeline duration
+    const regenerationTimer = this.time.delayedCall(GAME_MECHANICS.HOLE_DURATION, () => {
       // Verify hole still exists before filling
-      const currentHoleKey = `${gridX},${gridY}`;
-      if (this.holes.has(currentHoleKey)) {
+      if (this.holes.has(holeKey)) {
         this.fillHole(gridX, gridY);
       }
     }, undefined, this); // Use 'this' as context
@@ -863,7 +1014,6 @@ export class GameScene extends Scene {
       isDigging: true
     };
     
-    const holeKey = `${gridX},${gridY}`;
     this.holes.set(holeKey, holeData);
     
     // After digging animation completes, set isDigging to false
@@ -905,29 +1055,12 @@ export class GameScene extends Scene {
     // Check if any guards can escape before hole fills
     this.checkGuardEscapeBeforeHoleFills(holeKey);
     
-    try {
-      holeData.sprite.play('hole-fill');
-      
-      // Set up one-time event listener for animation completion
-      holeData.sprite.once('animationcomplete', (animation: any) => {
-        if (animation.key === 'hole-fill') {
-          this.restoreOriginalTile(holeData, holeKey);
-        }
-      });
-      
-      // Fallback timeout in case animation takes too long or fails
-      this.time.delayedCall(2000, () => {
-        if (this.holes.has(holeKey)) {
-          this.restoreOriginalTile(holeData, holeKey);
-        }
-      });
-      
-    } catch (error) {
-      // Fallback - directly restore tile after short delay
-      this.time.delayedCall(1000, () => {
-        this.restoreOriginalTile(holeData, holeKey);
-      });
-    }
+    // IMMEDIATELY restore the tile - no animation delay for synchronized filling
+    // This ensures the hole turns into brick at exactly t2
+    this.restoreOriginalTile(holeData, holeKey);
+    
+    // Optional: Play a fill animation on the restored tile for visual effect
+    // This doesn't delay the actual tile restoration
   }
   
   private restoreOriginalTile(holeData: HoleData, holeKey: string): void {
@@ -991,16 +1124,24 @@ export class GameScene extends Scene {
     const hole = this.holes.get(holeKey);
     
     if (hole && !hole.isDigging) {
-      // Check if hole contains any guards before making player fall
+      // Check if hole contains any guards (both stunned and unstunned) before making player fall
       const guardsInHole = this.guards.filter(guard => 
         guard.getCurrentHole() === holeKey && 
-        guard.getState() === GuardState.IN_HOLE
+        (guard.getState() === GuardState.IN_HOLE || guard.getState() === GuardState.STUNNED_IN_HOLE)
       );
       
       if (guardsInHole.length > 0) {
-        // Hole contains guards - they act as a bridge, player can walk over safely
-        // Do not make player fall through hole with guards in it
-        return;
+        // Rule 8: Check if player is standing on top of any guards in hole
+        const playerOnTopOfGuard = guardsInHole.some(guard => guard.isEntityOnTop(this.player.sprite));
+        
+        if (playerOnTopOfGuard) {
+          // Rule 8: Player is standing on guard - provide platform physics
+          this.handlePlayerOnGuardPlatform();
+          return; // Player is supported by guard platform
+        } else {
+          // Player near hole with guards but not on top - prevent falling through
+          return; // Hole contains guards - act as bridge
+        }
       }
       
       // Hole is empty - proceed with normal falling logic
@@ -1019,15 +1160,26 @@ export class GameScene extends Scene {
     const belowHole = this.holes.get(belowHoleKey);
     
     if (belowHole && !belowHole.isDigging) {
-      // Check if hole below contains any guards before making player fall
+      // Check if hole below contains any guards (both stunned and unstunned) before making player fall
       const guardsInBelowHole = this.guards.filter(guard => 
         guard.getCurrentHole() === belowHoleKey && 
-        guard.getState() === GuardState.IN_HOLE
+        (guard.getState() === GuardState.IN_HOLE || guard.getState() === GuardState.STUNNED_IN_HOLE)
       );
       
       if (guardsInBelowHole.length > 0) {
-        // Hole below contains guards - they provide support, player doesn't fall
-        return;
+        // Rule 8: Check if player would be standing on guards in hole below
+        const playerWouldBeOnTop = guardsInBelowHole.some(guard => {
+          // Check if player's bottom aligns with guard's platform area
+          const playerBottom = this.player.sprite.getBounds().bottom;
+          const guardPlatform = guard.getPlatformBounds();
+          return guardPlatform && guardPlatform.y <= playerBottom + 8; // Platform tolerance
+        });
+        
+        if (playerWouldBeOnTop) {
+          // Provide platform support from guards below
+          this.handlePlayerOnGuardPlatform();
+        }
+        return; // Guards provide support either way
       }
       
       // Hole below is empty - player should fall through
@@ -1341,6 +1493,9 @@ export class GameScene extends Scene {
       `Moving Despite 0 Velocity: ${(Math.abs(positionDelta.x) > 0.01 || Math.abs(positionDelta.y) > 0.01) && playerBody.velocity.x === 0 && playerBody.velocity.y === 0 ? '⚠️ YES' : 'No'}`,
       `Body Moves Enabled: ${playerBody.moves ? '✓' : '🔒 LOCKED'}`,
       '',
+      '=== CLIMB VALIDATION SYSTEM ===',
+      `ClimbValidation Active: ${this.climbValidation ? '✓' : '✗'}`,
+      '',
       '=== VISUAL LEGEND ===',
       'RED: Sprite bounds (visual)',
       'BLUE: Collision body (physics)',
@@ -1352,15 +1507,128 @@ export class GameScene extends Scene {
     this.debugText.setText(debugInfo.join('\n'));
   }
 
-  private updateGuards(time: number, delta: number): void {
+  private updateGuards(gameTime: number, delta: number): void {
     this.guards.forEach(guard => {
-      guard.update(time, delta);
-      this.checkGuardHoleCollisions(guard);
+      guard.update(gameTime, delta);  // Pass consistent gameTime to guard
+      this.checkGuardHoleCollisions(guard, gameTime);
       this.updateGuardClimbableState(guard);
+      
+      // Rule 8: Check for guard-to-guard platform interactions
+      this.checkGuardPlatformInteractions(guard);
     });
   }
+
+  // Rule 8: Handle guard-to-guard platform mechanics
+  private checkGuardPlatformInteractions(guard: Guard): void {
+    if (guard.getState() !== GuardState.RUNNING_LEFT && guard.getState() !== GuardState.RUNNING_RIGHT) {
+      return; // Only check for moving guards
+    }
+
+    // Check if this guard is standing on another guard in a hole
+    const guardOnPlatform = this.guards.find(platformGuard => {
+      if (platformGuard === guard) return false; // Don't check against self
+      return platformGuard.isEntityOnTop(guard.sprite);
+    });
+
+    if (guardOnPlatform) {
+      // Rule 8: This guard is standing on another guard - provide platform physics
+      const guardBody = guard.sprite.body as Phaser.Physics.Arcade.Body;
+      
+      if (guardBody && guardBody.velocity.y > 0) {
+        // Stop falling if landing on guard platform
+        guardBody.setVelocityY(0);
+      }
+      
+      GameLogger.debug(`Guard ${guard.getGuardId()} standing on guard ${guardOnPlatform.getGuardId()} platform`);
+    }
+  }
+
+  // Check for timeline-based guard deaths (Rule 7)
+  private checkTimelineBasedGuardDeaths(currentTime: number): void {
+    // Get all active hole timelines using proper public method
+    const activeTimelines = this.holeTimeline.getAllActiveTimelines();
+    
+    // Only log debug info for first few guards in holes
+    if (this.debugLogCount < this.maxDebugLogs) {
+      const guardsInAnyHole = this.guards.filter(g => g.getCurrentHole() !== null);
+      if (guardsInAnyHole.length > 0) {
+        // Log only once per second to reduce spam
+        const secondsElapsed = Math.floor(currentTime / 1000);
+        if (this.lastDebugSecond !== secondsElapsed) {
+          this.lastDebugSecond = secondsElapsed;
+          
+          guardsInAnyHole.forEach(guard => {
+            const holeKey = guard.getCurrentHole();
+            const timeline = this.holeTimeline.getHoleTimeline(holeKey!);
+            if (timeline) {
+              const timeUntilClose = (timeline.t2 - currentTime) / 1000;
+              const guardFallTime = guard.getFallTime();
+              const stunEndTime = guard.getStunEndTime();
+              const shouldDie = guard.shouldDieFromHole(timeline.t2);
+              
+              this.debugLogCount++;
+              console.log(`[RULE 7 DEBUG] Guard ${guard.getGuardId()} in hole ${holeKey}:
+                - Current time: ${currentTime}
+                - Fall time (tg1): ${guardFallTime}
+                - Stun end (tg1+m): ${stunEndTime}
+                - Hole close (t2): ${timeline.t2}
+                - Time until close: ${timeUntilClose.toFixed(1)}s
+                - Should die: ${shouldDie} (${stunEndTime} >= ${timeline.t2} = ${stunEndTime >= timeline.t2})
+                (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
+            } else {
+              this.debugLogCount++;
+              console.log(`[RULE 7 ERROR] Guard ${guard.getGuardId()} in hole ${holeKey} but NO TIMELINE FOUND!
+                (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
+            }
+          });
+        }
+      }
+    }
+    
+    // Check each active hole timeline for guards that should die
+    for (const [holeKey, timeline] of activeTimelines) {
+      const holeCloseTime = timeline.t2;
+      const shouldFillHole = currentTime >= holeCloseTime; // Check if it's time to fill hole
+      
+      // Find guards in this hole that should die based on Rule 7
+      const guardsInHole = this.guards.filter(guard => guard.getCurrentHole() === holeKey);
+      
+      let anyGuardShouldDie = false;
+      for (const guard of guardsInHole) {
+        if (guard.shouldDieFromHole(holeCloseTime)) {
+          anyGuardShouldDie = true;
+          
+          // Only kill guard if not already dying
+          if (guard.getState() !== GuardState.REBORN) {
+            // Always log deaths (they're critical and rare)
+            console.log(`[RULE 7 DEATH] Killing guard ${guard.getGuardId()} in hole ${holeKey}`);
+            
+            // Remove guard from timeline tracking
+            this.holeTimeline.removeGuardFromHole(holeKey, guard.getGuardId());
+            
+            // Execute guard death and respawn
+            guard.executeTimelineBasedDeath();
+          }
+        }
+      }
+      
+      // If we're at or past t2 AND guards should die in this hole, trigger fill
+      if (shouldFillHole && (anyGuardShouldDie || guardsInHole.length === 0)) {
+        // Parse hole coordinates from key
+        const [gridXStr, gridYStr] = holeKey.split(',');
+        const gridX = parseInt(gridXStr);
+        const gridY = parseInt(gridYStr);
+        
+        // Check if hole still exists and trigger fill
+        if (this.holes.has(holeKey)) {
+          console.log(`[HOLE FILL SYNC] Triggering immediate hole fill for ${holeKey} at t2`);
+          this.fillHole(gridX, gridY);
+        }
+      }
+    }
+  }
   
-  private checkGuardHoleCollisions(guard: Guard): void {
+  private checkGuardHoleCollisions(guard: Guard, currentTime: number): void {
     const guardX = Math.floor(guard.sprite.x / GAME_CONFIG.tileSize);
     const guardY = Math.floor(guard.sprite.y / GAME_CONFIG.tileSize);
     const holeKey = `${guardX},${guardY}`;
@@ -1370,25 +1638,60 @@ export class GameScene extends Scene {
       const holeData = this.holes.get(holeKey)!;
       if (holeData.sprite && holeData.sprite.visible) {
         
-        // Only trap guard if they are falling into the hole or moving slowly
-        const guardBody = guard.sprite.body as Phaser.Physics.Arcade.Body;
-        const isMovingHorizontally = Math.abs(guardBody.velocity.x) > 50; // Moving fast horizontally
-        const isFalling = guardBody.velocity.y > 0; // Falling down
-        const isOnGround = guardBody.blocked.down || guardBody.touching.down;
-        
-        // Guards should be aggressive and chase player even through holes
-        // Only trap if they're really falling in (not actively chasing)
-        const isActivelyChasing = Math.abs(guardBody.velocity.x) > 30; // Moving with purpose
-        const isSlowlyFalling = isFalling && Math.abs(guardBody.velocity.y) < 100; // Slow fall, not fast drop
-        
-        if (!isActivelyChasing && (isSlowlyFalling || (isOnGround && !isMovingHorizontally))) {
-          // Special handling for bottom-layer holes - shorter trap time
-          if (holeData.gridY >= 15) {
-            GuardLogger.debug('Guard trapped in bottom hole - will respawn quickly');
-          }
-          guard.fallIntoHole(holeKey);
+        // Don't trap guard if already in hole (prevent duplicate timeline entries)
+        if (guard.getState() === GuardState.IN_HOLE || guard.getState() === GuardState.STUNNED_IN_HOLE) {
+          return;
         }
-        // Guard is actively chasing - let them pass through or jump over
+        
+        // Simplified logic: Any guard that falls into a visible hole should be trapped
+        // This matches classic Lode Runner behavior more closely
+        const guardBody = guard.sprite.body as Phaser.Physics.Arcade.Body;
+        const isFalling = guardBody.velocity.y > 0; // Falling down
+        const isNearHoleCenter = Math.abs(guard.sprite.x - (holeData.gridX * 32 + 16)) < 16; // Within hole bounds
+        
+        if (isFalling && isNearHoleCenter) {
+          // Only log first few guard falls
+          if (this.debugLogCount < this.maxDebugLogs) {
+            this.debugLogCount++;
+            console.log(`[HOLE FALL] Guard ${guard.getGuardId()} falling into hole ${holeKey} at time ${currentTime}
+              (Log ${this.debugLogCount}/${this.maxDebugLogs})`);
+          }
+          
+          // Check if hole has timeline entry (should exist from hole creation)
+          const holeTimeline = this.holeTimeline.getHoleTimeline(holeKey);
+          if (!holeTimeline) {
+            if (this.debugLogCount < this.maxDebugLogs) {
+              console.log(`[HOLE FALL ERROR] No timeline for hole ${holeKey} - creating fallback`);
+            }
+            // Create timeline for this hole if missing (fallback)
+            this.holeTimeline.createHoleTimeline(holeKey, currentTime - 1000, GAME_MECHANICS.HOLE_DURATION);
+          }
+          
+          // Use timeline-based hole falling system
+          guard.fallIntoHole(holeKey, currentTime);
+          
+          // Add guard to hole timeline tracking
+          this.holeTimeline.addGuardToHole(
+            holeKey,
+            guard.getGuardId(),
+            currentTime,
+            GAME_MECHANICS.GUARD_STUN_DURATION
+          );
+          
+          // Debug: Log the timeline calculation for Rule 7 (only first few)
+          if (this.debugLogCount < this.maxDebugLogs) {
+            const timeline = this.holeTimeline.getHoleTimeline(holeKey);
+            if (timeline) {
+              const guardRecoveryTime = currentTime + GAME_MECHANICS.GUARD_STUN_DURATION;
+              const wouldDie = guardRecoveryTime >= timeline.t2;
+              console.log(`[RULE 7 CALC] Guard fall at ${currentTime}:
+                - Stun duration (m): ${GAME_MECHANICS.GUARD_STUN_DURATION}
+                - Recovery time (tg1+m): ${guardRecoveryTime}
+                - Hole close time (t2): ${timeline.t2}
+                - Will die?: ${wouldDie} (${guardRecoveryTime} >= ${timeline.t2})`);
+            }
+          }
+        }
       }
     }
   }
@@ -1455,21 +1758,32 @@ export class GameScene extends Scene {
   }
 
   private checkGuardEscapeBeforeHoleFills(holeKey: string): void {
-    GuardLogger.debug(`Checking if guards can escape from hole ${holeKey} before it fills`);
+    GuardLogger.debug(`Checking guards in hole ${holeKey} before it fills - using timeline Rule 7 logic`);
     
-    // Find guards in this specific hole
-    const guardsInHole = this.guards.filter(guard => guard.getCurrentHole() === holeKey);
+    // Get the timeline data for this hole
+    const timeline = this.holeTimeline.getHoleTimeline(holeKey);
+    
+    // Find guards in this specific hole that are NOT already dying
+    const guardsInHole = this.guards.filter(guard => {
+      return guard.getCurrentHole() === holeKey && 
+             guard.getState() !== GuardState.REBORN; // Don't kill guards already dying
+    });
     
     if (guardsInHole.length > 0) {
-      GuardLogger.debug(`Found ${guardsInHole.length} guard(s) in hole ${holeKey}`);
+      GuardLogger.debug(`Found ${guardsInHole.length} guard(s) still alive in hole ${holeKey} - hole is filling NOW`);
       
-      guardsInHole.forEach((guard, index) => {
-        const canEscape = guard.attemptHoleEscape();
-        if (canEscape) {
-          GuardLogger.debug(`Guard ${index} escaped from hole ${holeKey}`);
-        } else {
-          GuardLogger.debug(`Guard ${index} trapped in hole ${holeKey} - will respawn`);
+      // CRITICAL: Force kill all guards still in hole when it fills
+      // This is the final safety net to prevent stuck guards
+      guardsInHole.forEach((guard) => {
+        console.log(`[HOLE FILL SAFETY] Force killing guard ${guard.getGuardId()} still in filling hole ${holeKey}`);
+        
+        // Remove from timeline tracking
+        if (timeline) {
+          this.holeTimeline.removeGuardFromHole(holeKey, guard.getGuardId());
         }
+        
+        // Force death and respawn - guard couldn't escape in time
+        guard.executeTimelineBasedDeath();
       });
     }
   }

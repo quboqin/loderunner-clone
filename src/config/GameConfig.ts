@@ -34,7 +34,13 @@ export const ASSET_KEYS = {
 
 // Game mechanics constants - following GPT-5 suggestion to avoid magic numbers
 export const GAME_MECHANICS = {
-  HOLE_FILL_DELAY: 5000,           // 5 seconds for holes to fill
+  // Timeline constants for hole-guard-player mechanics
+  HOLE_DURATION: 5000,             // n: Hole duration in milliseconds (t2 = t1 + n)
+  GUARD_STUN_DURATION: 2000,       // m: Guard stun/faint time after falling into hole
+  GUARD_RESPAWN_DELAY: 3000,       // h: Guard respawn delay after death in milliseconds
+  
+  // Legacy constants (keeping for backward compatibility)
+  HOLE_FILL_DELAY: 5000,           // 5 seconds for holes to fill (same as HOLE_DURATION)
   PLAYER_INVINCIBILITY_TIME: 2000,  // 2 seconds invincibility after respawn
   EXIT_LADDER_FADE_DURATION: 2000,  // 2 seconds for exit ladder fade-in
   GUARD_MOVEMENT_SPEED: 60,         // Guard movement speed
