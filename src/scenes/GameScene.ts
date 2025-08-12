@@ -403,6 +403,10 @@ export class GameScene extends Scene {
       GuardLogger.debug(`Creating guard ${index} at position (${guardPos.x + 16}, ${guardPos.y + 16})`);
       const guard = new Guard(this, guardPos.x + 16, guardPos.y + 16, this.player.sprite);
       guard.setCollisionCallbacks(this.ladderTiles, this.ropeTiles, this.solidTiles);
+      
+      // Pass ClimbValidation instance for hole escape mechanics
+      guard.setClimbValidation(this.climbValidation);
+      
       this.guards.push(guard);
     });
     
@@ -433,6 +437,11 @@ export class GameScene extends Scene {
   private handleGuardToGuardCollision(guardA: Guard, guardB: Guard): void {
     const guardAState = guardA.getState();
     const guardBState = guardB.getState();
+    
+    // Don't handle collision if either guard is stunned in a hole
+    if (guardAState === GuardState.STUNNED_IN_HOLE || guardBState === GuardState.STUNNED_IN_HOLE) {
+      return; // No collision handling for stunned guards
+    }
     
     // Special handling for guards in holes - they can help each other climb out
     if (guardAState === GuardState.IN_HOLE && guardBState === GuardState.IN_HOLE) {
@@ -475,6 +484,15 @@ export class GameScene extends Scene {
   }
 
   private bounceGuard(guard: Guard, direction: number): void {
+    // Don't bounce guards that are in holes
+    const guardState = guard.getState();
+    if (guardState === GuardState.STUNNED_IN_HOLE || 
+        guardState === GuardState.IN_HOLE || 
+        guardState === GuardState.ESCAPING_HOLE ||
+        guard.getCurrentHole() !== null) {
+      return; // Don't bounce guards in holes
+    }
+    
     // Give guard a small velocity push in the specified direction
     const body = guard.sprite.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(direction * 50); // Small bounce velocity
@@ -1758,7 +1776,7 @@ export class GameScene extends Scene {
   }
 
   private checkGuardEscapeBeforeHoleFills(holeKey: string): void {
-    GuardLogger.debug(`Checking guards in hole ${holeKey} before it fills - using timeline Rule 7 logic`);
+    console.log(`[ESCAPE DEBUG] Checking guards in hole ${holeKey} before it fills`);
     
     // Get the timeline data for this hole
     const timeline = this.holeTimeline.getHoleTimeline(holeKey);
@@ -1770,21 +1788,40 @@ export class GameScene extends Scene {
     });
     
     if (guardsInHole.length > 0) {
-      GuardLogger.debug(`Found ${guardsInHole.length} guard(s) still alive in hole ${holeKey} - hole is filling NOW`);
+      console.log(`[ESCAPE DEBUG] Found ${guardsInHole.length} guard(s) in hole ${holeKey} - giving them ONE LAST CHANCE to escape`);
       
-      // CRITICAL: Force kill all guards still in hole when it fills
-      // This is the final safety net to prevent stuck guards
+      // Give guards ONE FINAL ESCAPE ATTEMPT before hole fills
+      let escapedGuards = 0;
+      
       guardsInHole.forEach((guard) => {
-        console.log(`[HOLE FILL SAFETY] Force killing guard ${guard.getGuardId()} still in filling hole ${holeKey}`);
+        const guardState = guard.getState();
+        console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} state: ${guardState}`);
         
-        // Remove from timeline tracking
-        if (timeline) {
-          this.holeTimeline.removeGuardFromHole(holeKey, guard.getGuardId());
+        // Only try escape for guards that aren't already escaping
+        if (guardState === GuardState.IN_HOLE || guardState === GuardState.STUNNED_IN_HOLE) {
+          // Give guard one final chance to escape using legacy escape method
+          const couldEscape = guard.attemptHoleEscape();
+          
+          if (couldEscape && guard.getState() === GuardState.ESCAPING_HOLE) {
+            console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} successfully started escape!`);
+            escapedGuards++;
+          } else {
+            console.log(`[ESCAPE DEBUG] Guard ${guard.getGuardId()} could not escape - killing`);
+            
+            // Remove from timeline tracking
+            if (timeline) {
+              this.holeTimeline.removeGuardFromHole(holeKey, guard.getGuardId());
+            }
+            
+            // Force death and respawn - guard couldn't escape in time
+            guard.executeTimelineBasedDeath();
+          }
         }
-        
-        // Force death and respawn - guard couldn't escape in time
-        guard.executeTimelineBasedDeath();
       });
+      
+      if (escapedGuards > 0) {
+        console.log(`[ESCAPE DEBUG] ${escapedGuards} guard(s) started escaping from hole ${holeKey}`);
+      }
     }
   }
 

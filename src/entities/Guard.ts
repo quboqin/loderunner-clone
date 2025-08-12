@@ -1,6 +1,7 @@
 import { BaseEntity, EntityConfig, EntityType, PhysicsConfig } from './BaseEntity';
 import { LogCategory } from '@/utils/Logger';
 import { GAME_MECHANICS } from '@/config/GameConfig';
+import { ClimbValidation } from '@/utils/ClimbValidation';
 
 export enum GuardState {
   IDLE = 'idle',
@@ -36,6 +37,8 @@ export class Guard extends BaseEntity {
   private currentHole: string | null = null;
   private fallTime: number = 0; // tg1: Time when guard fell into hole
   private stunEndTime: number = 0; // tg1 + m: When guard can start climbing
+  private escapeTargetPosition: { x: number, y: number } | null = null; // Target position for hole escape
+  private escapeTimer: Phaser.Time.TimerEvent | null = null; // Timer for escape completion
   private isStunned: boolean = false; // Whether guard is in mandatory stun period
   
   // Legacy timing (for backward compatibility during transition)
@@ -49,6 +52,10 @@ export class Guard extends BaseEntity {
   private onRope: boolean = false;
   private ladderExitCooldown: number = 0; // Cooldown to prevent immediate ladder re-entry after exiting
   private lastLadderTileX: number = -1; // Track which ladder tile we last exited to prevent re-entry
+  
+  // Hole escape mechanics
+  private climbValidation: ClimbValidation | null = null;
+  private lastEscapeAttempt: number = 0; // Timestamp of last escape attempt to prevent spam
   
   constructor(scene: Phaser.Scene, x: number, y: number, targetPlayer: Phaser.GameObjects.Sprite) {
     const config: EntityConfig = {
@@ -96,6 +103,12 @@ export class Guard extends BaseEntity {
       this.lastLadderTileX = -1; // Reset ladder tracking when cooldown expires
     }
     
+    // Debug: Log guard state periodically when in hole
+    if ((this.state === GuardState.STUNNED_IN_HOLE || this.state === GuardState.IN_HOLE) && 
+        Math.floor(time / 1000) !== Math.floor((time - delta) / 1000)) { // Once per second
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} update - state: ${this.state}, time: ${time.toFixed(1)}, stunEndTime: ${this.stunEndTime}`);
+    }
+    
     // Debug: Check if guard is near world boundaries (only log when actually at boundary)
     if (this.sprite.x > 890 || this.sprite.x < 10 || this.sprite.y > 500 || this.sprite.y < 10) {
       this.logger.debug(`Guard at boundary: pos(${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`);
@@ -107,9 +120,14 @@ export class Guard extends BaseEntity {
       
       // Check if stun period has ended
       if (time >= this.stunEndTime) {
-        this.logger.debug(`Guard ${this.guardId} stun period ended, transitioning to IN_HOLE state`);
+        console.log(`[ESCAPE DEBUG] Guard ${this.guardId} stun period ended at time ${time}, transitioning to IN_HOLE state`);
+        console.log(`[ESCAPE DEBUG] Before setState: state=${this.state}, currentHole=${this.currentHole}`);
         this.setState(GuardState.IN_HOLE);
         this.isStunned = false;
+        console.log(`[ESCAPE DEBUG] After setState: state=${this.state}, currentHole=${this.currentHole}`);
+        
+        // Immediately attempt escape on first frame of IN_HOLE
+        this.lastEscapeAttempt = time - 1000; // Force immediate escape attempt
       }
       return; // Don't do other AI while stunned
     }
@@ -118,14 +136,31 @@ export class Guard extends BaseEntity {
       this.holeTimer += delta; // Keep legacy timer for compatibility
       
       // Guard is in hole but no longer stunned - can attempt to climb
-      // Timeline-based escape logic will be handled by GameScene via HoleTimeline
-      // This preserves the existing escape attempt structure but timeline determines timing
+      // Check for escape opportunities every 1 second
+      if (time - this.lastEscapeAttempt >= 1000) { // 1 second cooldown between attempts
+        console.log(`[ESCAPE DEBUG] Guard ${this.guardId} is IN_HOLE, attempting escape (holeTimer: ${(this.holeTimer/1000).toFixed(1)}s)`);
+        this.lastEscapeAttempt = time;
+        this.attemptHoleEscapeInternal(time);
+      }
+      
       return; // Don't do other AI while in hole
     }
     
     // Don't do AI while escaping from hole
     if (this.state === GuardState.ESCAPING_HOLE) {
       return;
+    }
+    
+    // Safety check: If guard has currentHole set but wrong state, fix it
+    if (this.currentHole && 
+        this.state !== GuardState.IN_HOLE && 
+        this.state !== GuardState.STUNNED_IN_HOLE && 
+        this.state !== GuardState.ESCAPING_HOLE) {
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} has currentHole=${this.currentHole} but state=${this.state} - clearing hole reference`);
+      this.currentHole = null;
+      this.fallTime = 0;
+      this.stunEndTime = 0;
+      this.holeTimer = 0;
     }
     
     // Make AI decisions periodically
@@ -555,6 +590,22 @@ export class Guard extends BaseEntity {
   
   protected setState(newState: GuardState): void {
     if (this.state !== newState) {
+      // Debug state transitions for hole-related states
+      if ((this.state === GuardState.STUNNED_IN_HOLE || this.state === GuardState.IN_HOLE) ||
+          (newState === GuardState.STUNNED_IN_HOLE || newState === GuardState.IN_HOLE)) {
+        console.log(`[ESCAPE DEBUG] Guard ${this.guardId} state transition: ${this.state} -> ${newState}, currentHole: ${this.currentHole}`);
+        
+        // Log stack trace for unexpected transitions
+        if (this.currentHole && 
+            (this.state === GuardState.STUNNED_IN_HOLE || this.state === GuardState.IN_HOLE) &&
+            newState !== GuardState.IN_HOLE && 
+            newState !== GuardState.ESCAPING_HOLE && 
+            newState !== GuardState.STUNNED_IN_HOLE) {
+          console.log(`[ESCAPE DEBUG] WARNING: Unexpected state transition while in hole!`);
+          console.trace();
+        }
+      }
+      
       // Handle physics changes when entering/leaving climbing state
       const body = this.sprite.body as Phaser.Physics.Arcade.Body;
       
@@ -872,6 +923,11 @@ export class Guard extends BaseEntity {
     this.onRope = rope;
   }
   
+  // Set ClimbValidation instance for hole escape mechanics
+  public setClimbValidation(climbValidation: ClimbValidation): void {
+    this.climbValidation = climbValidation;
+  }
+  
   // Check if guard can climb (on ladder)
   public canClimb(): boolean {
     return this.onLadder;
@@ -902,7 +958,7 @@ export class Guard extends BaseEntity {
       return;
     }
     
-    this.logger.debug(`Guard ${this.guardId} falling into hole ${holeKey} at time ${currentTime}`);
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} falling into hole ${holeKey} at time ${currentTime}`);
     
     // Set timeline variables following Rule 6: Guard delayed for m seconds after falling
     this.fallTime = currentTime; // tg1
@@ -910,6 +966,8 @@ export class Guard extends BaseEntity {
     this.isStunned = true;
     this.currentHole = holeKey;
     this.holeTimer = 0; // Keep legacy timer for compatibility
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - fallTime: ${this.fallTime}, stunEndTime: ${this.stunEndTime}, duration: ${GAME_MECHANICS.GUARD_STUN_DURATION}ms`);
     
     // Start in stunned state (Rule 6: fainting period)
     this.setState(GuardState.STUNNED_IN_HOLE);
@@ -927,31 +985,235 @@ export class Guard extends BaseEntity {
   // Legacy escape method - functionality moved to timeline-based system
   // Keeping for backward compatibility with existing attemptHoleEscape() calls
   
-  // Check if guard can escape from hole (called when hole is about to fill)
+  // New timeline-based escape method with ClimbValidation
+  private attemptHoleEscapeInternal(currentTime: number): void {
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} attempting hole escape...`);
+    
+    if (!this.climbValidation || !this.currentHole) {
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Missing climbValidation: ${!this.climbValidation}, Missing currentHole: ${!this.currentHole}`);
+      return; // No climb validation system or not in hole
+    }
+    
+    // Check if guard can attempt climb based on timeline rules
+    if (!this.canAttemptClimb(currentTime)) {
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Cannot attempt climb yet (still stunned or timeline prevents)`);
+      return; // Still stunned or timeline prevents climbing
+    }
+    
+    // Timeline-aware coordination: Check if escape is still possible
+    const timelineDeath = this.checkTimelineDeathPrediction(currentTime);
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Timeline death prediction: willDie=${timelineDeath.willDie}, timeRemaining=${timelineDeath.timeRemaining}ms`);
+    
+    if (timelineDeath.willDie && timelineDeath.timeRemaining < 1000) { // Less than 1 second left
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} skipping escape attempt - timeline death imminent in ${timelineDeath.timeRemaining}ms`);
+      return; // Don't waste time on futile escape attempts
+    }
+    
+    // Parse hole coordinates
+    const [gridXStr, gridYStr] = this.currentHole.split(',');
+    const holeGridX = parseInt(gridXStr);
+    const holeGridY = parseInt(gridYStr);
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Checking escape from hole at (${holeGridX}, ${holeGridY})`);
+    
+    // Use ClimbValidation to check if escape is possible
+    const canClimbOut = this.climbValidation.canClimbOut(holeGridX, holeGridY);
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - ClimbValidation.canClimbOut() = ${canClimbOut}`);
+    
+    if (canClimbOut) {
+      const bestExit = this.climbValidation.getBestClimbExit(holeGridX, holeGridY);
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Best exit:`, bestExit);
+      
+      if (bestExit) {
+        console.log(`[ESCAPE DEBUG] Guard ${this.guardId} found escape route from hole ${this.currentHole}: ${bestExit.direction} exit to (${bestExit.x}, ${bestExit.y})`);
+        
+        // Start escaping process
+        this.setState(GuardState.ESCAPING_HOLE);
+        this.executeClimbValidationEscape(bestExit);
+        return;
+      } else {
+        console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - canClimbOut=true but no bestExit found`);
+      }
+    } else {
+      // Get debug info about why climb failed
+      const debugInfo = this.climbValidation.getClimbDebugInfo(holeGridX, holeGridY);
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Cannot climb out:`, debugInfo);
+    }
+    
+    // Check if other guards can help with platform assistance
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Attempting platform assistance...`);
+    this.attemptPlatformAssistedEscape();
+  }
+  
+  // Predict if guard will die based on timeline rules (for escape planning)
+  private checkTimelineDeathPrediction(currentTime: number): { willDie: boolean; timeRemaining: number } {
+    if (!this.currentHole || this.fallTime === 0) {
+      return { willDie: false, timeRemaining: Infinity };
+    }
+
+    // Calculate when hole will close (get from timeline if possible)
+    const gameScene = this.scene as any;
+    const holeCloseTime = gameScene.holeTimeline?.getHoleTimeline(this.currentHole)?.t2 || 
+                         (this.fallTime + GAME_MECHANICS.HOLE_DURATION);
+
+    // Calculate when guard would recover from stun
+    const guardRecoveryTime = this.fallTime + GAME_MECHANICS.GUARD_STUN_DURATION;
+
+    // Rule 7: Guard dies if tg1 + m >= t2
+    const willDie = guardRecoveryTime >= holeCloseTime;
+    const timeRemaining = holeCloseTime - currentTime;
+
+    return { willDie, timeRemaining };
+  }
+  
+  // Execute climb using ClimbValidation exit point
+  private executeClimbValidationEscape(exitPoint: any): void {
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} executing climb validation escape to ${exitPoint.direction} exit`);
+    
+    // Calculate target position - place guard safely on solid ground
+    const targetX = (exitPoint.x * 32) + 16; // Convert grid to pixel coordinates
+    const targetY = (exitPoint.y * 32) + 8; // Place slightly higher to ensure clearing the hole
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Current pos: (${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`);
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Target pos: (${targetX}, ${targetY})`);
+    
+    // Set climbing movement toward exit point
+    const deltaX = targetX - this.sprite.x;
+    const deltaY = targetY - this.sprite.y;
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Delta: (${deltaX.toFixed(1)}, ${deltaY.toFixed(1)})`);
+    
+    // Stronger upward velocity to ensure guard clears the hole
+    body.setVelocityX(deltaX > 0 ? 100 : -100); // Faster horizontal movement
+    body.setVelocityY(-150); // Stronger upward movement to climb out
+    body.setGravityY(0); // No gravity while climbing
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Set velocity: (${body.velocity.x}, ${body.velocity.y})`);
+    
+    // Use climbing animation
+    this.sprite.anims.play('guard-climb', true);
+    
+    // Store target position for completion
+    this.escapeTargetPosition = { x: targetX, y: targetY };
+    
+    // Complete escape after reaching exit point
+    const climbDuration = Math.max(500, Math.abs(deltaY) * 6); // Faster climb
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Climb duration: ${climbDuration}ms`);
+    
+    // Clear escape timer if it exists
+    if (this.escapeTimer) {
+      this.escapeTimer.destroy();
+      this.escapeTimer = null;
+    }
+    
+    this.escapeTimer = this.scene.time.delayedCall(climbDuration, () => {
+      console.log(`[ESCAPE DEBUG] Guard ${this.guardId} - Completing hole escape at position (${targetX}, ${targetY})`);
+      // Position guard at the escape target to prevent falling back in
+      this.sprite.setPosition(targetX, targetY);
+      this.completeHoleEscape();
+      this.escapeTimer = null;
+    });
+  }
+  
+  // Attempt to get help from other guards for platform climbing
+  private attemptPlatformAssistedEscape(): void {
+    if (!this.currentHole) return;
+    
+    // Access the GameScene to find other guards
+    const gameScene = this.scene as any;
+    if (!gameScene.guards) return;
+    
+    // Find other guards in the same hole who could act as platforms
+    const otherGuardsInHole = gameScene.guards.filter((guard: Guard) => {
+      return guard !== this && 
+             guard.getCurrentHole() === this.currentHole &&
+             guard.canBeSteppedOn();
+    });
+    
+    if (otherGuardsInHole.length > 0) {
+      // Use the closest guard as a platform
+      const platformGuard = this.findClosestGuard(otherGuardsInHole);
+      if (platformGuard) {
+        this.logger.debug(`Guard ${this.guardId} attempting platform-assisted escape using guard ${platformGuard.getGuardId()}`);
+        this.executeAssistedClimbWithPlatform(platformGuard);
+      }
+    } else {
+      // Try to help other guards by becoming a platform
+      this.offerPlatformAssistance();
+    }
+  }
+  
+  // Find the closest guard from a list
+  private findClosestGuard(guards: Guard[]): Guard | null {
+    if (guards.length === 0) return null;
+    if (guards.length === 1) return guards[0];
+    
+    let closest = guards[0];
+    let minDistance = Phaser.Math.Distance.Between(
+      this.sprite.x, this.sprite.y,
+      closest.sprite.x, closest.sprite.y
+    );
+    
+    for (let i = 1; i < guards.length; i++) {
+      const distance = Phaser.Math.Distance.Between(
+        this.sprite.x, this.sprite.y,
+        guards[i].sprite.x, guards[i].sprite.y
+      );
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = guards[i];
+      }
+    }
+    
+    return closest;
+  }
+  
+  // Offer to help other guards by acting as a platform
+  private offerPlatformAssistance(): void {
+    if (!this.currentHole || !this.canBeSteppedOn()) return;
+    
+    const gameScene = this.scene as any;
+    if (!gameScene.guards) return;
+    
+    // Find other guards in the same hole who need help
+    const otherGuardsInHole = gameScene.guards.filter((guard: Guard) => {
+      return guard !== this && 
+             guard.getCurrentHole() === this.currentHole &&
+             guard.getState() === GuardState.IN_HOLE &&
+             !guard.isCurrentlyStunned();
+    });
+    
+    // Check if any guard could use this guard as a platform
+    for (const guard of otherGuardsInHole) {
+      const distance = Phaser.Math.Distance.Between(
+        this.sprite.x, this.sprite.y,
+        guard.sprite.x, guard.sprite.y
+      );
+      
+      // If guards are close enough, offer platform assistance
+      if (distance < 25) { // Within climbing range
+        this.logger.debug(`Guard ${this.guardId} offering platform assistance to guard ${guard.getGuardId()}`);
+        // Let the other guard know this guard can be used as a platform
+        // This will be picked up in their next escape attempt
+        break;
+      }
+    }
+  }
+  
+  // Legacy escape method - now calls new method for compatibility
   public attemptHoleEscape(): boolean {
     if (this.state !== GuardState.IN_HOLE) {
       return true; // Not in hole, so no problem
     }
     
-    // Check if guard has time to escape (hole fills at 5s, guard can escape up to 4.5s)
-    const maxEscapeTime = 4500; // 4.5 seconds - last chance before hole fills
-    if (this.holeTimer < maxEscapeTime) {
-      this.logger.debug(`Guard attempting escape from hole: timer=${(this.holeTimer / 1000).toFixed(1)}s, maxTime=${(maxEscapeTime / 1000).toFixed(1)}s`);
-      this.setState(GuardState.ESCAPING_HOLE);
-      
-      // Start climbing animation - guard will climb out over 1 second
-      this.executeHoleEscapeClimb();
-      
-      return true; // Successfully escaping
-    }
+    // Call new escape method
+    this.attemptHoleEscapeInternal(this.scene.time.now);
     
-    // Guard trapped too long - will be killed and respawn
-    this.logger.debug(`Guard trapped in hole for ${(this.holeTimer / 1000).toFixed(1)}s - triggering respawn`);
-    
-    // Trigger respawn immediately 
-    this.respawnAtStart();
-    
-    return false; // Cannot escape, was trapped but now respawned
+    // Return based on current state
+    return this.state === GuardState.ESCAPING_HOLE;
   }
   
   // Execute climbing out of hole animation and movement
@@ -993,14 +1255,20 @@ export class Guard extends BaseEntity {
     // Clear hole state
     this.currentHole = null;
     this.holeTimer = 0;
+    this.escapeTargetPosition = null;
+    this.fallTime = 0;
+    this.stunEndTime = 0;
     
     // Restore normal physics
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     body.setGravityY(600);
     body.setVelocityY(0);
+    body.setVelocityX(0); // Stop horizontal movement too
     
     // Return to normal state
     this.setState(GuardState.IDLE);
+    
+    console.log(`[ESCAPE DEBUG] Guard ${this.guardId} successfully escaped from hole and is now at (${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`);
   }
   
   // Respawn guard at starting position
