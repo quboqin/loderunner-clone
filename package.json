@@ -20,7 +20,7 @@
     "javascript",
     "typescript"
   ],
-  "author": "Your Name",
+  "author": "Qubo Qin supported by Claude Code vibe coding",
   "license": "MIT",
   "dependencies": {
     "phaser": "^3.85.2"

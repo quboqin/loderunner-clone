@@ -8,6 +8,7 @@ import { PlayerState } from '@/types/GameTypes';
 import { InputManager } from '@/managers/InputManager';
 import { SoundManager } from '@/managers/SoundManager';
 import { LogCategory } from '@/utils/Logger';
+import { GAME_CONFIG } from '@/config/GameConfig';
 import { GAME_MECHANICS } from '@/config/GameConfig';
 
 export class Player extends BaseEntity {
@@ -51,7 +52,7 @@ export class Player extends BaseEntity {
   protected initializeEntity(): void {
     // Set up Player-specific physics
     const physicsConfig: PhysicsConfig = {
-      width: 16 / 1.6, // Compensate for sprite scale
+      width: GAME_CONFIG.halfTileSize / 1.6, // Compensate for sprite scale
       height: 28 / 1.6,
       offsetX: 8 / 1.6,
       offsetY: 4 / 1.6,

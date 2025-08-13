@@ -2,6 +2,7 @@ export interface GameConfig {
   width: number;
   height: number;
   tileSize: number;
+  halfTileSize: number;
   levelWidth: number;
   levelHeight: number;
 }

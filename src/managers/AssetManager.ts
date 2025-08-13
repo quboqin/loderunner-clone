@@ -1,18 +1,6 @@
-import { Logger, LogCategory } from '@/utils/Logger';
-import { GAME_MECHANICS } from '@/config/GameConfig';
+import { GAME_MECHANICS, TILE_TYPES, GAME_CONFIG } from '@/config/GameConfig';
 
 export class AssetManager {
-  private static instance: AssetManager;
-  private loadedAssets: Map<string, any> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): AssetManager {
-    if (!AssetManager.instance) {
-      AssetManager.instance = new AssetManager();
-    }
-    return AssetManager.instance;
-  }
 
   // Load IBM-style sprite atlases with JSON frame data
   static loadIBMAssets(scene: Phaser.Scene): void {
@@ -150,52 +138,6 @@ export class AssetManager {
     createAnimation('hole-fill', 'fillHole', GAME_MECHANICS.ANIMATION_FPS.HOLE_FILL, 0); // Speed up fill animation from 4 to 30 FPS
   }
 
-  // Asset loading utilities for future integration with Roku repository
-  async loadSpriteSheet(scene: Phaser.Scene, key: string, url: string, frameConfig?: any): Promise<void> {
-    return new Promise((resolve, reject) => {
-      scene.load.spritesheet(key, url, frameConfig);
-      scene.load.once(`filecomplete-spritesheet-${key}`, () => {
-        this.loadedAssets.set(key, true);
-        resolve();
-      });
-      scene.load.once(`loaderror`, () => {
-        Logger.warn(LogCategory.AUDIO, `Failed to load spritesheet: ${key}`);
-        reject(new Error(`Failed to load ${key}`));
-      });
-    });
-  }
-
-  async loadImage(scene: Phaser.Scene, key: string, url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      scene.load.image(key, url);
-      scene.load.once(`filecomplete-image-${key}`, () => {
-        this.loadedAssets.set(key, true);
-        resolve();
-      });
-      scene.load.once(`loaderror`, () => {
-        Logger.warn(LogCategory.AUDIO, `Failed to load image: ${key}`);
-        reject(new Error(`Failed to load ${key}`));
-      });
-    });
-  }
-
-  async loadAudio(scene: Phaser.Scene, key: string, urls: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      scene.load.audio(key, urls);
-      scene.load.once(`filecomplete-audio-${key}`, () => {
-        this.loadedAssets.set(key, true);
-        resolve();
-      });
-      scene.load.once(`loaderror`, () => {
-        Logger.warn(LogCategory.AUDIO, `Failed to load audio: ${key}`);
-        reject(new Error(`Failed to load ${key}`));
-      });
-    });
-  }
-
-  isAssetLoaded(key: string): boolean {
-    return this.loadedAssets.has(key);
-  }
 
   // Parse classic.json level data format
   static parseLevelData(levelArray: string[]): { tiles: number[][], playerStart: {x: number, y: number}, guards: {x: number, y: number}[], gold: {x: number, y: number}[], exitLadder: {x: number, y: number} | null, allSPositions: {x: number, y: number}[] } {
@@ -232,7 +174,7 @@ export class AssetManager {
         if (levelArray[y][rightmostSColumn] === 'S') {
           exitLadderX = rightmostSColumn;
           exitLadderY = y;
-          exitLadder = { x: exitLadderX * 32, y: exitLadderY * 32 }; // Convert to pixel coordinates
+          exitLadder = { x: exitLadderX * GAME_CONFIG.tileSize, y: exitLadderY * GAME_CONFIG.tileSize }; // Convert to pixel coordinates
           break; // First (topmost) S in rightmost column
         }
       }
@@ -246,29 +188,29 @@ export class AssetManager {
         // Check if this 'S' should be the exit ladder
         if (char === 'S') {
           // Collect all S positions
-          allSPositions.push({ x: x * 32, y: y * 32 });
+          allSPositions.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize });
           
-          row.push(0); // ALL S characters hidden initially
+          row.push(TILE_TYPES.EMPTY); // ALL S characters hidden initially
         } else {
           switch (char) {
-            case ' ': row.push(0); break; // Empty
-            case '#': row.push(1); break; // Brick
-            case 'H': row.push(3); break; // Ladder
-            case '-': row.push(4); break; // Rope
+            case ' ': row.push(TILE_TYPES.EMPTY); break; // Empty
+            case '#': row.push(TILE_TYPES.BRICK); break; // Brick
+            case 'H': row.push(TILE_TYPES.LADDER); break; // Ladder
+            case '-': row.push(TILE_TYPES.ROPE); break; // Rope
             case '$': 
-              row.push(0); // Empty space with gold
-              gold.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+              row.push(TILE_TYPES.EMPTY); // Empty space with gold
+              gold.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
               break;
             case '&': 
-              row.push(0); // Empty space
-              playerStart = { x: x * 32, y: y * 32 }; // Convert to pixel coordinates
+              row.push(TILE_TYPES.EMPTY); // Empty space with player
+              playerStart = { x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }; // Convert to pixel coordinates
               break;
             case '0': 
-              row.push(0); // Empty space with guard
-              guards.push({ x: x * 32, y: y * 32 }); // Convert to pixel coordinates
+              row.push(TILE_TYPES.EMPTY); // Empty space with guard
+              guards.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
               break;
-            case '@': row.push(5); break; // Special brick (can be dug)
-            default: row.push(0); // Default to empty
+            case '@': row.push(TILE_TYPES.SOLID); break; // Solid block (cannot be dug)
+            default: row.push(TILE_TYPES.EMPTY); // Default to empty
           }
         }
       }
@@ -281,29 +223,14 @@ export class AssetManager {
   // Get tile sprite frame name from tile type
   static getTileFrame(tileType: number): string {
     switch (tileType) {
-      case 0: return 'empty';
-      case 1: return 'brick';
-      case 2: return 'solid';
-      case 3: return 'ladder';
-      case 4: return 'rope';
-      case 5: return 'solid'; // Solid block (@) - cannot be dug
-      case 6: return 'ladder'; // Exit ladder (looks like ladder but hidden initially)
+      case TILE_TYPES.EMPTY: return 'empty';
+      case TILE_TYPES.BRICK: return 'brick';
+      case TILE_TYPES.LADDER: return 'ladder';
+      case TILE_TYPES.ROPE: return 'rope';
+      case TILE_TYPES.SOLID: return 'solid'; // Solid block (@) - cannot be dug
+      case TILE_TYPES.EXIT_LADDER: return 'ladder'; // Exit ladder (looks like ladder but hidden initially)
       default: return 'empty';
     }
   }
 
-  // Asset optimization utilities
-  optimizeAssetLoading(scene: Phaser.Scene): void {
-    // Enable file size limits and compression
-    scene.load.maxParallelDownloads = 4;
-    
-    // Add progress tracking
-    scene.load.on('progress', (_progress: number) => {
-      // Loading progress tracking
-    });
-
-    scene.load.on('complete', () => {
-      // All assets loaded
-    });
-  }
 }

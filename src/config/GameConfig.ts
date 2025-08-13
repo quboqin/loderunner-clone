@@ -1,9 +1,10 @@
 import { GameConfig } from '@/types/GameTypes';
 
 export const GAME_CONFIG: GameConfig = {
-  width: 896,  // 28 tiles * 32px
-  height: 600, // 16 tiles * 32px + 88px UI space
+  width: 896,  // levelWidth tiles * tileSize px
+  height: 600, // levelHeight tiles * tileSize px + 88px UI space
   tileSize: 32,
+  halfTileSize: 16,  // Half of tileSize, used for centering
   levelWidth: 28,
   levelHeight: 16
 };
@@ -32,6 +33,16 @@ export const ASSET_KEYS = {
   }
 } as const;
 
+// Tile type constants to avoid magic numbers
+export const TILE_TYPES = {
+  EMPTY: 0,
+  BRICK: 1,      // Diggable (#)
+  LADDER: 3,     // (H)
+  ROPE: 4,       // (-)
+  SOLID: 5,      // Non-diggable (@)
+  EXIT_LADDER: 6 // Hidden exit ladder (S)
+} as const;
+
 // Game mechanics constants - following GPT-5 suggestion to avoid magic numbers
 export const GAME_MECHANICS = {
   // Timeline constants for hole-guard-player mechanics
@@ -46,14 +57,6 @@ export const GAME_MECHANICS = {
   GUARD_MOVEMENT_SPEED: 60,         // Guard movement speed
   PLAYER_MOVEMENT_SPEED: 100,       // Player movement speed
   GRAVITY: 800,                     // Gravity force
-  TILE_TYPES: {
-    EMPTY: 0,
-    BRICK: 1,      // Diggable
-    SOLID: 2,      // Non-diggable
-    LADDER: 3,
-    ROPE: 4,
-    CONCRETE: 5    // Non-diggable
-  },
   
   // Rendering depth constants
   DEPTHS: {

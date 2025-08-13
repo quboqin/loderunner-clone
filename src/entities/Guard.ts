@@ -1,6 +1,6 @@
 import { BaseEntity, EntityConfig, EntityType, PhysicsConfig } from './BaseEntity';
 import { LogCategory } from '@/utils/Logger';
-import { GAME_MECHANICS } from '@/config/GameConfig';
+import { GAME_MECHANICS, GAME_CONFIG } from '@/config/GameConfig';
 import { ClimbValidation } from '@/utils/ClimbValidation';
 
 export enum GuardState {
@@ -79,7 +79,7 @@ export class Guard extends BaseEntity {
   protected initializeEntity(): void {
     // Set up Guard-specific physics
     const physicsConfig: PhysicsConfig = {
-      width: 16,
+      width: GAME_CONFIG.halfTileSize,
       height: 28,
       offsetX: 2,
       offsetY: -6,
@@ -217,7 +217,7 @@ export class Guard extends BaseEntity {
       
       // Actively seek ladders/ropes by moving horizontally
       // If player is significantly to the left/right, move toward them to find connections
-      if (Math.abs(deltaX) > 32) { // More than one tile away horizontally
+      if (Math.abs(deltaX) > GAME_CONFIG.tileSize) { // More than one tile away horizontally
         const seekDirection = deltaX > 0 ? GuardState.RUNNING_RIGHT : GuardState.RUNNING_LEFT;
         const seekBlocked = deltaX > 0 ? body.blocked.right : body.blocked.left;
         
@@ -365,8 +365,8 @@ export class Guard extends BaseEntity {
         body.setVelocityX(0); // No horizontal movement while climbing
         
         // Ensure guard stays centered on ladder during climbing
-        const currentTileX = Math.floor(this.sprite.x / 32);
-        const ladderCenterX = (currentTileX * 32) + 16;
+        const currentTileX = Math.floor(this.sprite.x / GAME_CONFIG.tileSize);
+        const ladderCenterX = (currentTileX * GAME_CONFIG.tileSize) + GAME_CONFIG.halfTileSize;
         if (Math.abs(this.sprite.x - ladderCenterX) > 2) { // Only adjust if drift is significant
           this.sprite.setX(ladderCenterX);
         }
@@ -926,10 +926,10 @@ export class Guard extends BaseEntity {
   // Snap guard to center X position of the ladder tile for proper climbing
   private snapToLadderCenter(): void {
     // Calculate which tile the guard is currently on
-    const currentTileX = Math.floor(this.sprite.x / 32);
+    const currentTileX = Math.floor(this.sprite.x / GAME_CONFIG.tileSize);
     
     // Calculate the center X position of this tile
-    const ladderCenterX = (currentTileX * 32) + 16; // Tile center is at tile coordinate * 32 + 16
+    const ladderCenterX = (currentTileX * GAME_CONFIG.tileSize) + GAME_CONFIG.halfTileSize; // Tile center is at tile coordinate * tileSize + halfTileSize
     
     // Snap guard to ladder center X position
     this.sprite.setX(ladderCenterX);
@@ -1038,8 +1038,8 @@ export class Guard extends BaseEntity {
     
     
     // Calculate target position - place guard safely on solid ground
-    const targetX = (exitPoint.x * 32) + 16; // Convert grid to pixel coordinates
-    const targetY = (exitPoint.y * 32) + 8; // Place slightly higher to ensure clearing the hole
+    const targetX = (exitPoint.x * GAME_CONFIG.tileSize) + GAME_CONFIG.halfTileSize; // Convert grid to pixel coordinates
+    const targetY = (exitPoint.y * GAME_CONFIG.tileSize) + (GAME_CONFIG.halfTileSize / 2); // Place slightly higher to ensure clearing the hole
     
     
     // Set climbing movement toward exit point
@@ -1310,7 +1310,7 @@ export class Guard extends BaseEntity {
       this.onLadder = true;
     } else {
       // Check if this is a different ladder tile than the one we just exited
-      const currentTileX = Math.floor(this.sprite.x / 32);
+      const currentTileX = Math.floor(this.sprite.x / GAME_CONFIG.tileSize);
       if (currentTileX !== this.lastLadderTileX) {
         this.onLadder = true; // Allow climbing different ladders even during cooldown
       }

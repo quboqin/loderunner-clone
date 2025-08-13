@@ -1,5 +1,5 @@
 import { Scene } from 'phaser';
-import { SCENE_KEYS, GAME_CONFIG, GAME_MECHANICS } from '@/config/GameConfig';
+import { SCENE_KEYS, GAME_CONFIG, GAME_MECHANICS, TILE_TYPES } from '@/config/GameConfig';
 import { GameState, HoleData } from '@/types/GameTypes';
 import { SoundManager } from '@/managers/SoundManager';
 import { AssetManager } from '@/managers/AssetManager';
@@ -23,8 +23,6 @@ export class GameScene extends Scene {
   private ladderTiles!: Phaser.Physics.Arcade.StaticGroup;
   private ropeTiles!: Phaser.Physics.Arcade.StaticGroup;
   private goldSprites!: Phaser.Physics.Arcade.StaticGroup;
-  private exitLadderPosition: {x: number, y: number} | null = null;
-  private allSPositions: {x: number, y: number}[] = [];
   private exitLadderSprites: Phaser.GameObjects.Sprite[] = [];
   private exitMarker: Phaser.GameObjects.Text | null = null;
   private holes!: Map<string, HoleData>;
@@ -32,6 +30,7 @@ export class GameScene extends Scene {
   private guards: Guard[] = [];
   private playerInvincible: boolean = false;
   private invincibilityEndTime: number = 0;
+  private levelInfo: any = null; // Cached parsed level data to avoid duplicate parsing
   
   // Timeline-based hole system (new rule implementation)
   private holeTimeline!: HoleTimeline;
@@ -108,16 +107,15 @@ export class GameScene extends Scene {
     }
     
     const tileType = this.getTileType(gridX, gridY);
-    return tileType === GAME_MECHANICS.TILE_TYPES.EMPTY || 
-           tileType === GAME_MECHANICS.TILE_TYPES.LADDER ||
-           tileType === GAME_MECHANICS.TILE_TYPES.ROPE;
+    return tileType === TILE_TYPES.EMPTY || 
+           tileType === TILE_TYPES.LADDER ||
+           tileType === TILE_TYPES.ROPE;
   }
 
   private isTileSolid(gridX: number, gridY: number): boolean {
     const tileType = this.getTileType(gridX, gridY);
-    return tileType === GAME_MECHANICS.TILE_TYPES.BRICK ||
-           tileType === GAME_MECHANICS.TILE_TYPES.SOLID ||
-           tileType === GAME_MECHANICS.TILE_TYPES.CONCRETE;
+    return tileType === TILE_TYPES.BRICK ||
+           tileType === TILE_TYPES.SOLID;
   }
 
   private getTileType(gridX: number, gridY: number): number {
@@ -125,18 +123,17 @@ export class GameScene extends Scene {
     const tile = this.levelTiles.get(tileKey);
     
     if (!tile) {
-      return GAME_MECHANICS.TILE_TYPES.EMPTY;
+      return TILE_TYPES.EMPTY;
     }
 
     // Map sprite frames to tile types (this is a simplified mapping)
     const frame = tile.frame.name;
-    if (frame.includes('brick')) return GAME_MECHANICS.TILE_TYPES.BRICK;
-    if (frame.includes('solid') || frame.includes('wall')) return GAME_MECHANICS.TILE_TYPES.SOLID;
-    if (frame.includes('ladder')) return GAME_MECHANICS.TILE_TYPES.LADDER;
-    if (frame.includes('rope')) return GAME_MECHANICS.TILE_TYPES.ROPE;
-    if (frame.includes('concrete')) return GAME_MECHANICS.TILE_TYPES.CONCRETE;
+    if (frame.includes('brick')) return TILE_TYPES.BRICK;
+    if (frame.includes('solid') || frame.includes('wall')) return TILE_TYPES.SOLID;
+    if (frame.includes('ladder')) return TILE_TYPES.LADDER;
+    if (frame.includes('rope')) return TILE_TYPES.ROPE;
     
-    return GAME_MECHANICS.TILE_TYPES.EMPTY;
+    return TILE_TYPES.EMPTY;
   }
 
   // Rule 8: Handle player standing on guard platform
@@ -255,7 +252,6 @@ export class GameScene extends Scene {
       this.exitMarker = null;
     }
     this.exitLadderSprites = [];
-    this.exitLadderPosition = null;
     this.levelCompleting = false;
   }
 
@@ -274,22 +270,18 @@ export class GameScene extends Scene {
       currentLevelData = levelsData.levels['level-001'];
     }
     
-    // Parse level data using AssetManager
-    const levelInfo = AssetManager.parseLevelData(currentLevelData);
-    
-    // Store exit ladder position and all S positions
-    this.exitLadderPosition = levelInfo.exitLadder;
-    this.allSPositions = levelInfo.allSPositions;
+    // Parse level data using AssetManager and cache it for reuse
+    this.levelInfo = AssetManager.parseLevelData(currentLevelData);
     
     // Create tilemap from parsed data
-    this.createTilemap(levelInfo.tiles);
+    this.createTilemap(this.levelInfo.tiles);
     
     // Set player starting position
-    this.registry.set('playerStart', levelInfo.playerStart);
+    this.registry.set('playerStart', this.levelInfo.playerStart);
     
     // Create gold objects
-    levelInfo.gold.forEach((goldPos: { x: number; y: number }) => {
-      const gold = this.add.sprite(goldPos.x + 16, goldPos.y + 16, 'tiles', 'gold');
+    this.levelInfo.gold.forEach((goldPos: { x: number; y: number }) => {
+      const gold = this.add.sprite(goldPos.x + GAME_CONFIG.halfTileSize, goldPos.y + GAME_CONFIG.halfTileSize, 'tiles', 'gold');
       gold.setScale(1.6); // Keep scaling for gold to match tile size
       gold.setData('type', 'gold');
       gold.setDepth(GAME_MECHANICS.DEPTHS.GOLD); // Ensure gold renders above background elements
@@ -311,7 +303,7 @@ export class GameScene extends Scene {
           const pixelY = y * GAME_CONFIG.tileSize;
           
           const frameKey = AssetManager.getTileFrame(tileType);
-          const tile = this.add.sprite(pixelX + 16, pixelY + 16, 'tiles', frameKey);
+          const tile = this.add.sprite(pixelX + GAME_CONFIG.halfTileSize, pixelY + GAME_CONFIG.halfTileSize, 'tiles', frameKey);
           tile.setScale(1.6); // Keep scaling for tiles to maintain proper level size
           tile.setData('tileType', tileType);
           tile.setData('gridX', x);
@@ -332,15 +324,14 @@ export class GameScene extends Scene {
   private addTileCollision(tile: Phaser.GameObjects.Sprite, tileType: number): void {
     // Add collision bodies for different tile types
     switch (tileType) {
-      case 1: // Brick - solid collision, can be dug
-      case 2: // Solid - solid collision, cannot be dug
-      case 5: // Solid block (@) - solid collision, cannot be dug
+      case TILE_TYPES.BRICK: // Brick - solid collision, can be dug
+      case TILE_TYPES.SOLID: // Solid block (@) - solid collision, cannot be dug
         this.physics.add.existing(tile, true); // true = static body
         this.solidTiles.add(tile);
         tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_STANDARD); // Standard tile depth
         break;
       
-      case 3: // Ladder - climbable with platform-style collision (solid from top)
+      case TILE_TYPES.LADDER: // Ladder - climbable with platform-style collision (solid from top)
         this.physics.add.existing(tile, true);
         this.ladderTiles.add(tile);
         // Also add to solid tiles for top collision support
@@ -348,7 +339,7 @@ export class GameScene extends Scene {
         tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_ABOVE_HOLE); // Higher depth to render above holes
         break;
         
-      case 4: // Rope - climbable, no solid collision
+      case TILE_TYPES.ROPE: // Rope - climbable, no solid collision
         this.physics.add.existing(tile, true);
         this.ropeTiles.add(tile);
         tile.setDepth(GAME_MECHANICS.DEPTHS.TILE_ABOVE_HOLE); // Higher depth to render above holes
@@ -382,26 +373,17 @@ export class GameScene extends Scene {
       this.guards = [];
     }
     
-    // Load level data to get guard positions
-    const levelsData = this.cache.json.get('classic-levels');
-    const levelKey = `level-${this.gameState.currentLevel.toString().padStart(3, '0')}`;
-    LevelLogger.debug(`Loading level: ${levelKey}`);
-    let currentLevelData = levelsData.levels[levelKey];
-    
-    // If level doesn't exist, fallback to level 1
-    if (!currentLevelData) {
-      LevelLogger.warn(`Level ${levelKey} not found, falling back to level-001`);
-      currentLevelData = levelsData.levels['level-001'];
+    // Use cached level data instead of re-parsing
+    if (!this.levelInfo) {
+      GuardLogger.error('Level data not parsed yet! createLevel() should be called before createGuards()');
+      return;
     }
     
-    // Parse level data using AssetManager
-    const levelInfo = AssetManager.parseLevelData(currentLevelData);
-    
     // Create guard AI entities
-    GuardLogger.debug(`Creating ${levelInfo.guards.length} guards for level ${levelKey}`);
-    levelInfo.guards.forEach((guardPos: { x: number; y: number }, index: number) => {
-      GuardLogger.debug(`Creating guard ${index} at position (${guardPos.x + 16}, ${guardPos.y + 16})`);
-      const guard = new Guard(this, guardPos.x + 16, guardPos.y + 16, this.player.sprite);
+    GuardLogger.debug(`Creating ${this.levelInfo.guards.length} guards for level ${this.gameState.currentLevel}`);
+    this.levelInfo.guards.forEach((guardPos: { x: number; y: number }, index: number) => {
+      GuardLogger.debug(`Creating guard ${index} at position (${guardPos.x + GAME_CONFIG.halfTileSize}, ${guardPos.y + GAME_CONFIG.halfTileSize})`);
+      const guard = new Guard(this, guardPos.x + GAME_CONFIG.halfTileSize, guardPos.y + GAME_CONFIG.halfTileSize, this.player.sprite);
       guard.setCollisionCallbacks(this.ladderTiles, this.ropeTiles, this.solidTiles);
       
       // Pass ClimbValidation instance for hole escape mechanics
@@ -703,10 +685,10 @@ export class GameScene extends Scene {
       
       // Check all ladder tiles - use all detection points for ladders
       this.ladderTiles.children.entries.forEach((tile: any) => {
-        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
-        // So to get tile grid coordinates, we need to subtract 16 before dividing
-        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
+        // Account for tile positioning: tiles are positioned at center (pixelX + halfTileSize, pixelY + halfTileSize)
+        // So to get tile grid coordinates, we need to subtract halfTileSize before dividing
+        const tileTileX = Math.floor((tile.x - GAME_CONFIG.halfTileSize) / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor((tile.y - GAME_CONFIG.halfTileSize) / GAME_CONFIG.tileSize);
         
         
         // Check if this detection point overlaps with ladder tile
@@ -735,9 +717,9 @@ export class GameScene extends Scene {
     const jumpingFromRope = false;
     if (!jumpingFromRope) {
       this.ropeTiles.children.entries.forEach((tile: any) => {
-        // Account for tile positioning: tiles are positioned at center (pixelX + 16, pixelY + 16)
-        const tileTileX = Math.floor((tile.x - 16) / GAME_CONFIG.tileSize);
-        const tileTileY = Math.floor((tile.y - 16) / GAME_CONFIG.tileSize);
+        // Account for tile positioning: tiles are positioned at center (pixelX + halfTileSize, pixelY + halfTileSize)
+        const tileTileX = Math.floor((tile.x - GAME_CONFIG.halfTileSize) / GAME_CONFIG.tileSize);
+        const tileTileY = Math.floor((tile.y - GAME_CONFIG.halfTileSize) / GAME_CONFIG.tileSize);
         
         // Check if player center is at the same tile position as rope
         // This ensures consistent detection during horizontal movement
@@ -823,15 +805,15 @@ export class GameScene extends Scene {
   }
 
   private revealExitLadder(): void {
-    if (this.allSPositions.length === 0) {
+    if (!this.levelInfo?.allSPositions || this.levelInfo.allSPositions.length === 0) {
       return; // No S ladders in this level
     }
 
     // Create ladder sprites for all S positions
-    this.allSPositions.forEach((position, index) => {
+    this.levelInfo.allSPositions.forEach((position: { x: number; y: number }, index: number) => {
       const ladder = this.add.sprite(
-        position.x + 16, 
-        position.y + 16, 
+        position.x + GAME_CONFIG.halfTileSize, 
+        position.y + GAME_CONFIG.halfTileSize, 
         'tiles', 
         'ladder'
       );
@@ -840,8 +822,8 @@ export class GameScene extends Scene {
       ladder.setAlpha(0); // Start invisible
       
       // Calculate grid coordinates first
-      const gridX = position.x / 32;
-      const gridY = position.y / 32;
+      const gridX = position.x / GAME_CONFIG.tileSize;
+      const gridY = position.y / GAME_CONFIG.tileSize;
       const tileKey = `${gridX},${gridY}`;
       
       // Set tile data so collision detection recognizes this as a ladder
@@ -951,14 +933,14 @@ export class GameScene extends Scene {
     
     // Only brick tiles (type 1) can be dug
     // Solid blocks (type 2 and type 5) cannot be dug
-    return tileType === 1;
+    return tileType === TILE_TYPES.BRICK;
   }
 
   private createHole(gridX: number, gridY: number, direction: 'left' | 'right'): void {
     const currentTime = this.time.now;
     const holeKey = `${gridX},${gridY}`;
-    const pixelX = gridX * GAME_CONFIG.tileSize + 16;
-    const pixelY = gridY * GAME_CONFIG.tileSize + 16;
+    const pixelX = gridX * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
+    const pixelY = gridY * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
     
     // Get the original tile
     const tileKey = `${gridX},${gridY}`;
@@ -1083,8 +1065,8 @@ export class GameScene extends Scene {
   
   private restoreOriginalTile(holeData: HoleData, holeKey: string): void {
     // Instead of hiding/showing, recreate the tile completely
-    const pixelX = holeData.gridX * GAME_CONFIG.tileSize + 16;
-    const pixelY = holeData.gridY * GAME_CONFIG.tileSize + 16;
+    const pixelX = holeData.gridX * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
+    const pixelY = holeData.gridY * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
     
     // Clean up hole sprite first
     holeData.sprite.destroy();
@@ -1236,7 +1218,7 @@ export class GameScene extends Scene {
     }
 
     // Only check completion for the designated exit ladder position
-    if (!this.exitLadderPosition) {
+    if (!this.levelInfo?.exitLadder) {
       return;
     }
 
@@ -1247,8 +1229,8 @@ export class GameScene extends Scene {
     const playerTileY = Math.floor(playerCenterY / GAME_CONFIG.tileSize);
     
     // Get exit ladder position
-    const exitLadderTileX = this.exitLadderPosition.x / GAME_CONFIG.tileSize;
-    const exitLadderTileY = this.exitLadderPosition.y / GAME_CONFIG.tileSize;
+    const exitLadderTileX = this.levelInfo.exitLadder.x / GAME_CONFIG.tileSize;
+    const exitLadderTileY = this.levelInfo.exitLadder.y / GAME_CONFIG.tileSize;
     
     // Find the highest accessible position above the exit ladder
     const highestAccessibleY = this.findHighestAccessiblePosition(exitLadderTileX, exitLadderTileY);
@@ -1273,7 +1255,7 @@ export class GameScene extends Scene {
       // If there's a solid tile (brick, wall, solid block), we can't go higher
       if (tile && tile.getData('tileType')) {
         const tileType = tile.getData('tileType');
-        if (tileType === 1 || tileType === 2 || tileType === 5) { // Brick, solid, or special solid
+        if (tileType === TILE_TYPES.BRICK || tileType === TILE_TYPES.SOLID) { // Brick or solid block
           break; // Can't go through solid tiles
         }
       }
@@ -1292,13 +1274,13 @@ export class GameScene extends Scene {
   }
 
   private createExitMarker(): void {
-    if (!this.exitLadderPosition) {
+    if (!this.levelInfo?.exitLadder) {
       return;
     }
     
     // Get exit ladder position and find highest accessible position
-    const exitLadderTileX = this.exitLadderPosition.x / GAME_CONFIG.tileSize;
-    const exitLadderTileY = this.exitLadderPosition.y / GAME_CONFIG.tileSize;
+    const exitLadderTileX = this.levelInfo.exitLadder.x / GAME_CONFIG.tileSize;
+    const exitLadderTileY = this.levelInfo.exitLadder.y / GAME_CONFIG.tileSize;
     const highestAccessibleY = this.findHighestAccessiblePosition(exitLadderTileX, exitLadderTileY);
     
     // Calculate pixel position for the exit marker
@@ -1665,7 +1647,7 @@ export class GameScene extends Scene {
         // This matches classic Lode Runner behavior more closely
         const guardBody = guard.sprite.body as Phaser.Physics.Arcade.Body;
         const isFalling = guardBody.velocity.y > 0; // Falling down
-        const isNearHoleCenter = Math.abs(guard.sprite.x - (holeData.gridX * 32 + 16)) < 16; // Within hole bounds
+        const isNearHoleCenter = Math.abs(guard.sprite.x - (holeData.gridX * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize)) < GAME_CONFIG.halfTileSize; // Within hole bounds
         
         if (isFalling && isNearHoleCenter) {
           // Only log first few guard falls

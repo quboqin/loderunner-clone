@@ -445,3 +445,39 @@ Vercel is a terrifying platform. Delete all content related to Vercel and only k
 
 # Day 10
 add custom slash commands
+```
+/stage
+If the compilation is successful and there are no issues with type checking, add all changes of the code into the staging area.
+
+/commit
+If the task is completed, first update the progress, execute the stage, then commit to the git repository, but do not push to the remote.
+
+/push
+At the end of the day's work, push all work to the remote repository, merge the branches into the main branch, and then push the main branch.
+
+/plan
+As a project manager, update the project progress and formulate the next action plan.
+
+/arch
+As an architect, provide me with optimization suggestions for the entire project. Update the optimization suggestions in architecture.md, but do not take action. Wait for my confirmation.
+```
+
+Review Code
+1. In the scripts of package.json, what is the function of vite 'preview'
+2. Who will triggered 'build:netlify' and 'serve:netlify'
+3. What kind of scenario should we switch to scene pause
+4. In PreloadScene.ts, who and when will trigger the 'progress' and 'complete' signals
+5. Is the optimizeAssetLoading Function Necessary?
+Short Answer: NO, it's not necessary and should be removed
+6. In AssetManager.ts, these function 'loadSpriteSheet', 'loadImage' and 'loadAudio' can be removed?
+Short Answer: YES, they should be removed
+7. After checking parseLevelData and getTileFrame functions in AssetManager.ts, Is it necessary for case 2, why I see 2 solid types?
+Tile type 2 is defined but never used:
+    - No character in parseLevelData creates 
+    type 2
+    - getTileFrame has a case for type 2 that's 
+    never reached
+    - GameScene checks for type 2 but it never 
+    exists in actual levels
+8. the value in tiles is magic number, can we define these value to MACRO?   
+9. In GameScene.ts, AssetManager.parseLevelData(currentLevelData) is called twice, can you optimize?
