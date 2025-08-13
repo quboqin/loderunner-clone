@@ -481,3 +481,8 @@ Tile type 2 is defined but never used:
     exists in actual levels
 8. the value in tiles is magic number, can we define these value to MACRO?   
 9. In GameScene.ts, AssetManager.parseLevelData(currentLevelData) is called twice, can you optimize?
+
+51. AI Issues
+1. Issue 1: The height of the Guard is too high to pass through![alt text](<screenshots/Screenshot 2025-08-13 at 7.37.36 PM.png>)
+
+2. Issue 2: Guard will stuck on top of ladder, It's not easy to climb up and chase the Player。

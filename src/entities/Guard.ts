@@ -78,11 +78,12 @@ export class Guard extends BaseEntity {
   
   protected initializeEntity(): void {
     // Set up Guard-specific physics
+    // CRITICAL: Height must be much smaller than tile size (32px) to pass through tunnels
     const physicsConfig: PhysicsConfig = {
-      width: GAME_CONFIG.halfTileSize,
-      height: 28,
-      offsetX: 2,
-      offsetY: -6,
+      width: 10,  // Much narrower than tile size
+      height: 16, // Half the tile size - ensures easy passage through 32px gaps  
+      offsetX: 3,  // Center the narrower collision box
+      offsetY: 0,  // Center vertically in sprite
       gravityY: 600,
       bounce: 0.1,
       collideWorldBounds: true
@@ -184,6 +185,17 @@ export class Guard extends BaseEntity {
     const deltaY = playerY - guardY;
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     
+    // Priority 0: If climbing and player is roughly at same level, exit ladder to chase
+    if (this.state === GuardState.CLIMBING && Math.abs(deltaY) <= 25) {
+      // Player is at similar level - exit ladder to chase horizontally
+      if (Math.abs(deltaX) > 20) {
+        this.logger.debug(`Guard exiting ladder to chase player at same level`);
+        this.setState(deltaX > 0 ? GuardState.RUNNING_RIGHT : GuardState.RUNNING_LEFT);
+        this.lastDirection = deltaX > 0 ? 1 : -1;
+        return;
+      }
+    }
+
     // Priority 1: If already running and making progress, KEEP RUNNING (don't get distracted by ladders)
     if ((this.state === GuardState.RUNNING_LEFT || this.state === GuardState.RUNNING_RIGHT) && 
         Math.abs(deltaX) > 20) {
@@ -270,6 +282,18 @@ export class Guard extends BaseEntity {
           this.setState(deltaX > 0 ? GuardState.BAR_RIGHT : GuardState.BAR_LEFT);
           this.lastDirection = deltaX > 0 ? 1 : -1;
           return;
+        }
+      }
+      
+      // Blocked horizontally - only reverse if we've been blocked for a while
+      // This prevents immediate ping-pong behavior
+      if (this.state === GuardState.RUNNING_LEFT || this.state === GuardState.RUNNING_RIGHT) {
+        const currentDirection = this.state === GuardState.RUNNING_RIGHT ? 1 : -1;
+        const desiredDirection = deltaX > 0 ? 1 : -1;
+        
+        // If we're moving toward player but blocked, keep trying for a bit
+        if (currentDirection === desiredDirection) {
+          return; // Don't reverse immediately
         }
       }
       
@@ -417,11 +441,42 @@ export class Guard extends BaseEntity {
             break;
           }
           
+          // Check if blocked at top of ladder (can't climb up further)
+          if (deltaY < -15 && body.blocked.up) {
+            // At top of ladder, can't climb up - exit to chase player horizontally
+            this.logger.debug(`Guard at top of ladder, exiting to chase player`);
+            body.setVelocityY(0);
+            body.setGravityY(600); // Restore gravity
+            
+            // Force exit ladder and start horizontal chase
+            this.onLadder = false;
+            this.ladderExitCooldown = 500;
+            
+            const deltaX = this.targetPlayer.x - guardX;
+            if (Math.abs(deltaX) > 15) {
+              if (deltaX > 0) {
+                this.setState(GuardState.RUNNING_RIGHT);
+                this.lastDirection = 1;
+              } else {
+                this.setState(GuardState.RUNNING_LEFT);
+                this.lastDirection = -1;
+              }
+            } else {
+              this.setState(GuardState.IDLE);
+            }
+            break;
+          }
+          
           // Continue climbing towards player
           if (Math.abs(deltaY) > 20) { // Still need to climb
             const climbSpeed = 60;
             if (deltaY < 0) {
-              body.setVelocityY(-climbSpeed); // Climb up
+              // Only climb up if not blocked
+              if (!body.blocked.up) {
+                body.setVelocityY(-climbSpeed); // Climb up
+              } else {
+                body.setVelocityY(0); // Stop if blocked
+              }
             } else {
               // Check if we can actually climb down (not at bottom)
               if (!body.blocked.down) {
