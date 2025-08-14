@@ -57,6 +57,7 @@ export class GameScene extends Scene {
     this.initializeGameState();
     this.initializeAudio();
     this.initializeTimelineSystem(); // Initialize timeline-based hole mechanics
+    this.initializeClimbValidation(); // Initialize climb validation for hole escape
     this.setupInput(); // Initialize InputManager before creating Player
     this.createCollisionGroups();
     this.createLevel();
@@ -79,7 +80,10 @@ export class GameScene extends Scene {
   // Initialize timeline-based hole mechanics system
   private initializeTimelineSystem(): void {
     this.holeTimeline = new HoleTimeline();
-    
+  }
+  
+  // Initialize climb validation system for hole escape mechanics
+  private initializeClimbValidation(): void {
     // Create TileChecker implementation for ClimbValidation
     const tileChecker: TileChecker = {
       isTileStandable: (gridX: number, gridY: number): boolean => {
@@ -100,16 +104,33 @@ export class GameScene extends Scene {
 
   // TileChecker implementation methods
   private isTileStandable(gridX: number, gridY: number): boolean {
-    // A tile is standable if it's not solid and not in an active hole
+    // A tile is standable if it's solid (brick/solid) or climbable (ladder/rope)
+    // Empty tiles are NOT standable - entities fall through empty space
     const holeKey = `${gridX},${gridY}`;
+    
+    // Special case: Check if there's a guard trapped in this hole
+    // Guards in holes can be stood upon (Rule 8)
     if (this.holes.has(holeKey)) {
-      return false; // Position is a hole, not standable
+      // Check if any guard is in this hole position
+      if (this.guards) {
+        for (const guard of this.guards) {
+          const guardGridX = Math.floor(guard.sprite.x / GAME_CONFIG.tileSize);
+          const guardGridY = Math.floor(guard.sprite.y / GAME_CONFIG.tileSize);
+          if (guardGridX === gridX && guardGridY === gridY && 
+              (guard.getState() === GuardState.IN_HOLE || 
+               guard.getState() === GuardState.STUNNED_IN_HOLE)) {
+            return true; // Can stand on guard in hole
+          }
+        }
+      }
+      return false; // Empty hole, not standable
     }
     
     const tileType = this.getTileType(gridX, gridY);
-    return tileType === TILE_TYPES.EMPTY || 
-           tileType === TILE_TYPES.LADDER ||
-           tileType === TILE_TYPES.ROPE;
+    return tileType === TILE_TYPES.BRICK ||   // Can stand on diggable bricks
+           tileType === TILE_TYPES.SOLID ||   // Can stand on solid blocks
+           tileType === TILE_TYPES.LADDER ||  // Can climb ladders
+           tileType === TILE_TYPES.ROPE;      // Can hang on ropes
   }
 
   private isTileSolid(gridX: number, gridY: number): boolean {

@@ -83,7 +83,7 @@ export class Guard extends BaseEntity {
       width: 10,  // Much narrower than tile size
       height: 16, // Half the tile size - ensures easy passage through 32px gaps  
       offsetX: 3,  // Center the narrower collision box
-      offsetY: 0,  // Center vertically in sprite
+      offsetY: 4,  // Small positive offset to fine-tune position
       gravityY: 600,
       bounce: 0.1,
       collideWorldBounds: true

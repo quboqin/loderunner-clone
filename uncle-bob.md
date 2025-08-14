@@ -486,3 +486,8 @@ Tile type 2 is defined but never used:
 1. Issue 1: The height of the Guard is too high to pass through![alt text](<screenshots/Screenshot 2025-08-13 at 7.37.36 PM.png>)
 
 2. Issue 2: Guard will stuck on top of ladder, It's not easy to climb up and chase the Player。
+
+3. Is it correct that the empty tile is standable? solid tiles are also standable, and when the guard is in hole, the ![alt text](<screenshots/Screenshot 2025-08-14 at 1.36.31 PM.png>)
+  guard is also standable
+
+4. The Guard's foot is in the Tile of the next lower layer.
