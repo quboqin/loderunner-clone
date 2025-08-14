@@ -482,6 +482,11 @@ Tile type 2 is defined but never used:
 8. the value in tiles is magic number, can we define these value to MACRO?   
 9. In GameScene.ts, AssetManager.parseLevelData(currentLevelData) is called twice, can you optimize?
 
+10. depended on @architecture.md , do 
+  Core Extraction first , ultra think
+
+  the player can't climb on the rope
+
 51. AI Issues
 1. Issue 1: The height of the Guard is too high to pass through![alt text](<screenshots/Screenshot 2025-08-13 at 7.37.36 PM.png>)
 
@@ -491,3 +496,4 @@ Tile type 2 is defined but never used:
   guard is also standable
 
 4. The Guard's foot is in the Tile of the next lower layer.
+
