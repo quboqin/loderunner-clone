@@ -9,6 +9,7 @@ import { Player } from '@/entities/Player';
 import { Guard, GuardState } from '@/entities/Guard';
 import { HoleTimeline } from '@/utils/HoleTimeline';
 import { AssetManager } from '@/managers/AssetManager';
+import { SpritePool, PooledSprite } from '@/utils/SpritePool';
 import { GAME_CONFIG, GAME_MECHANICS, TILE_TYPES } from '@/config/GameConfig';
 import { HoleData } from '@/types/GameTypes';
 
@@ -16,6 +17,7 @@ export class HoleSystem extends BaseSystem {
   private holes: Map<string, HoleData> = new Map();
   private holeTimeline: HoleTimeline;
   private gameScene: GameScene;
+  private holePool!: SpritePool;
   
   constructor(scene: GameScene) {
     super(scene);
@@ -24,7 +26,11 @@ export class HoleSystem extends BaseSystem {
   }
   
   protected initialize(): void {
-    this.logger.debug('HoleSystem initialized');
+    // Initialize sprite pool for hole animations
+    this.holePool = new SpritePool(this.scene);
+    this.holePool.createPool('hole', 'hole', 'hole_00', 20); // Pre-allocate 20 hole sprites
+    
+    this.logger.debug('HoleSystem initialized with sprite pooling');
   }
   
   public update(time: number, _delta: number): void {
@@ -42,12 +48,19 @@ export class HoleSystem extends BaseSystem {
         holeData.regenerationTimer.destroy();
       }
       if (holeData.sprite) {
-        holeData.sprite.destroy();
+        // Return sprite to pool instead of destroying
+        this.holePool.releaseSprite(holeData.sprite as PooledSprite);
       }
     });
     
     this.holes.clear();
-    this.logger.debug('HoleSystem cleaned up');
+    
+    // Clean up sprite pool
+    if (this.holePool) {
+      this.holePool.destroy();
+    }
+    
+    this.logger.debug('HoleSystem cleaned up with sprite pool');
   }
   
   public getSystemName(): string {
@@ -195,8 +208,13 @@ export class HoleSystem extends BaseSystem {
     // non-diggable background elements (ropes, ladders) that exist at this position
     // These should remain visible and functional even with a hole above them
     
-    // Create hole sprite
-    const holeSprite = this.scene.add.sprite(pixelX, pixelY, 'hole', 0);
+    // Get hole sprite from pool instead of creating new one
+    const holeSprite = this.holePool.getSprite('hole', pixelX, pixelY) as Phaser.GameObjects.Sprite;
+    if (!holeSprite) {
+      this.logger.error('Failed to get hole sprite from pool');
+      return;
+    }
+    
     holeSprite.setScale(1.6);
     holeSprite.setDepth(50); // Low depth to avoid covering ropes/ladders
     holeSprite.setAlpha(1); // Ensure full opacity for proper rendering
@@ -217,6 +235,12 @@ export class HoleSystem extends BaseSystem {
     
     // Remove original tile from collision groups
     this.gameScene.getCollisionSystem().removeFromCollisionGroups(originalTile);
+    
+    // IMPORTANT: Remove tile from the LevelSystem's optimized 2D array
+    const levelSystem = this.gameScene.getLevelSystem();
+    if (levelSystem && typeof levelSystem.setTileInGrid === 'function') {
+      levelSystem.setTileInGrid(gridX, gridY, null);
+    }
     
     // Completely destroy the original tile to prevent visual artifacts
     originalTile.destroy();
@@ -260,7 +284,7 @@ export class HoleSystem extends BaseSystem {
   
   /**
    * Fill a hole and restore the original tile
-   * Extracted from GameScene.fillHole()
+   * Fixed to prevent trapping guards inside regenerated tiles
    */
   public fillHole(gridX: number, gridY: number): void {
     const holeKey = `${gridX},${gridY}`;
@@ -276,25 +300,41 @@ export class HoleSystem extends BaseSystem {
     // Check if any guards can escape before hole fills
     this.gameScene.checkGuardEscapeBeforeHoleFills(holeKey);
     
-    // IMMEDIATELY restore the tile - no animation delay for synchronized filling
-    // This ensures the hole turns into brick at exactly t2
-    this.restoreOriginalTile(holeData, holeKey);
+    // CRITICAL FIX: Check if any guards are still physically in the hole position
+    // If so, delay the tile restoration to prevent trapping guards in solid tiles
+    if (this.hasGuardsPhysicallyInHole(gridX, gridY)) {
+      this.logger.debug(`[HOLE FILL DELAYED] Guards still in hole ${holeKey}, delaying tile restoration`);
+      
+      // Set up a delayed check to retry filling when guards have moved
+      this.scene.time.delayedCall(500, () => {
+        if (this.holes.has(holeKey) && !this.hasGuardsPhysicallyInHole(gridX, gridY)) {
+          this.restoreOriginalTile(holeData, holeKey);
+        } else if (this.holes.has(holeKey)) {
+          // If guards are still there after delay, force them to escape or die
+          this.forceGuardEvacuation(gridX, gridY, holeKey);
+          this.restoreOriginalTile(holeData, holeKey);
+        }
+      });
+      return;
+    }
     
-    // Optional: Play a fill animation on the restored tile for visual effect
-    // This doesn't delay the actual tile restoration
+    // Safe to restore tile - no guards in the way
+    this.restoreOriginalTile(holeData, holeKey);
   }
   
   /**
    * Restore the original tile after hole fills
-   * Extracted from GameScene.restoreOriginalTile()
+   * Updated to use sprite pooling for better performance
    */
   private restoreOriginalTile(holeData: HoleData, holeKey: string): void {
     // Instead of hiding/showing, recreate the tile completely
     const pixelX = holeData.gridX * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
     const pixelY = holeData.gridY * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
     
-    // Clean up hole sprite first
-    holeData.sprite.destroy();
+    // Return hole sprite to pool instead of destroying it
+    if (holeData.sprite) {
+      this.holePool.releaseSprite(holeData.sprite as PooledSprite);
+    }
     
     // Get the original tile frame
     const frameKey = AssetManager.getTileFrame(holeData.originalTileType);
@@ -306,9 +346,15 @@ export class HoleSystem extends BaseSystem {
     newTile.setData('gridX', holeData.gridX);
     newTile.setData('gridY', holeData.gridY);
     
-    // Update tile reference in levelTiles map
+    // Update tile reference in levelTiles map and 2D array
     const tileKey = `${holeData.gridX},${holeData.gridY}`;
     this.gameScene.getLevelTiles().set(tileKey, newTile);
+    
+    // IMPORTANT: Also update the LevelSystem's optimized 2D array
+    const levelSystem = this.gameScene.getLevelSystem();
+    if (levelSystem && typeof (levelSystem as any).setTileInGrid === 'function') {
+      (levelSystem as any).setTileInGrid(holeData.gridX, holeData.gridY, newTile);
+    }
     
     // Add to collision groups via CollisionSystem
     this.gameScene.getCollisionSystem().addTileCollision(newTile, holeData.originalTileType);
@@ -317,6 +363,130 @@ export class HoleSystem extends BaseSystem {
     this.holes.delete(holeKey);
     
     this.logger.debug(`[HOLE FILL] Hole ${holeKey} filled and tile restored`);
+  }
+  
+  /**
+   * Check if any guards are physically positioned in the hole area
+   * This prevents trapping guards inside regenerated tiles
+   */
+  private hasGuardsPhysicallyInHole(gridX: number, gridY: number): boolean {
+    const holePixelX = gridX * GAME_CONFIG.tileSize;
+    const holePixelY = gridY * GAME_CONFIG.tileSize;
+    
+    // Get all guards from GameScene
+    const guards = (this.gameScene as any).guards || [];
+    
+    return guards.some((guard: any) => {
+      if (!guard.sprite || !guard.sprite.body) return false;
+      
+      const guardBody = guard.sprite.body;
+      const guardCenterX = guardBody.x + guardBody.width / 2;
+      const guardCenterY = guardBody.y + guardBody.height / 2;
+      
+      // Check if guard center is within the hole tile area (with small tolerance)
+      const tolerance = 8; // pixels
+      const inHoleX = guardCenterX >= (holePixelX - tolerance) && 
+                      guardCenterX <= (holePixelX + GAME_CONFIG.tileSize + tolerance);
+      const inHoleY = guardCenterY >= (holePixelY - tolerance) && 
+                      guardCenterY <= (holePixelY + GAME_CONFIG.tileSize + tolerance);
+      
+      const inHole = inHoleX && inHoleY;
+      
+      if (inHole) {
+        this.logger.debug(`[GUARD IN HOLE] Guard at (${guardCenterX.toFixed(1)}, ${guardCenterY.toFixed(1)}) still in hole area (${holePixelX}, ${holePixelY})`);
+      }
+      
+      return inHole;
+    });
+  }
+  
+  /**
+   * Force guards to evacuate a hole position before tile restoration
+   * This is a safety mechanism to prevent guards getting permanently trapped
+   */
+  private forceGuardEvacuation(gridX: number, gridY: number, _holeKey: string): void {
+    const holePixelX = gridX * GAME_CONFIG.tileSize;
+    const holePixelY = gridY * GAME_CONFIG.tileSize;
+    
+    // Get all guards from GameScene
+    const guards = (this.gameScene as any).guards || [];
+    
+    guards.forEach((guard: any) => {
+      if (!guard.sprite || !guard.sprite.body) return;
+      
+      const guardBody = guard.sprite.body;
+      const guardCenterX = guardBody.x + guardBody.width / 2;
+      const guardCenterY = guardBody.y + guardBody.height / 2;
+      
+      // Check if guard is in the hole area
+      const tolerance = 8;
+      const inHoleX = guardCenterX >= (holePixelX - tolerance) && 
+                      guardCenterX <= (holePixelX + GAME_CONFIG.tileSize + tolerance);
+      const inHoleY = guardCenterY >= (holePixelY - tolerance) && 
+                      guardCenterY <= (holePixelY + GAME_CONFIG.tileSize + tolerance);
+      
+      if (inHoleX && inHoleY) {
+        this.logger.debug(`[FORCE EVACUATION] Moving guard from hole position (${gridX}, ${gridY})`);
+        
+        // Try to move guard to nearest safe position
+        const safePositions = this.findSafePositions(gridX, gridY);
+        
+        if (safePositions.length > 0) {
+          const safePos = safePositions[0];
+          const safePixelX = safePos.x * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
+          const safePixelY = safePos.y * GAME_CONFIG.tileSize + GAME_CONFIG.halfTileSize;
+          
+          guard.sprite.setPosition(safePixelX, safePixelY);
+          this.logger.debug(`[FORCE EVACUATION] Guard moved to safe position (${safePos.x}, ${safePos.y})`);
+        } else {
+          // No safe position found - force guard respawn to prevent being trapped
+          this.logger.debug(`[FORCE EVACUATION] No safe position found, forcing guard respawn`);
+          guard.executeTimelineBasedDeath();
+        }
+      }
+    });
+  }
+  
+  /**
+   * Find safe positions around a hole for guard evacuation
+   */
+  private findSafePositions(holeX: number, holeY: number): Array<{x: number, y: number}> {
+    const safePositions: Array<{x: number, y: number}> = [];
+    
+    // Check positions around the hole (adjacent tiles)
+    const offsets = [
+      {x: -1, y: 0}, {x: 1, y: 0},  // Left, Right
+      {x: 0, y: -1}, {x: 0, y: 1},  // Up, Down
+      {x: -1, y: -1}, {x: 1, y: -1}, // Diagonals
+      {x: -1, y: 1}, {x: 1, y: 1}
+    ];
+    
+    for (const offset of offsets) {
+      const checkX = holeX + offset.x;
+      const checkY = holeY + offset.y;
+      
+      // Check bounds
+      if (checkX < 0 || checkX >= GAME_CONFIG.levelWidth || 
+          checkY < 0 || checkY >= GAME_CONFIG.levelHeight) {
+        continue;
+      }
+      
+      // Check if position is safe (not solid and not another hole)
+      const tileType = this.gameScene.getLevelSystem().getTileType(checkX, checkY);
+      const isHole = this.holes.has(`${checkX},${checkY}`);
+      
+      if ((tileType === TILE_TYPES.EMPTY || tileType === TILE_TYPES.LADDER || tileType === TILE_TYPES.ROPE) && !isHole) {
+        // Also check that there's solid ground below for guard to stand on
+        const belowTileType = this.gameScene.getLevelSystem().getTileType(checkX, checkY + 1);
+        const isBelowSolid = belowTileType === TILE_TYPES.BRICK || belowTileType === TILE_TYPES.SOLID;
+        
+        if (isBelowSolid || tileType === TILE_TYPES.LADDER || tileType === TILE_TYPES.ROPE) {
+          safePositions.push({x: checkX, y: checkY});
+        }
+      }
+    }
+    
+    return safePositions;
   }
   
   /**

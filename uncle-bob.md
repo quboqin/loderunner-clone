@@ -487,6 +487,8 @@ Tile type 2 is defined but never used:
 
   the player can't climb on the rope
 
+  Sort out the creation process of sprites and tiles, and identify points that can be optimized.
+
 51. AI Issues
 1. Issue 1: The height of the Guard is too high to pass through![alt text](<screenshots/Screenshot 2025-08-13 at 7.37.36 PM.png>)
 

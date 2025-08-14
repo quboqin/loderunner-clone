@@ -6,6 +6,7 @@
 import { BaseSystem } from './BaseSystem';
 import { GameScene } from '@/scenes/GameScene';
 import { AssetManager } from '@/managers/AssetManager';
+// Removed unused import
 import { GAME_CONFIG, GAME_MECHANICS, TILE_TYPES } from '@/config/GameConfig';
 import { LevelLogger } from '@/utils/Logger';
 
@@ -16,6 +17,7 @@ export interface GoldCount {
 
 export class LevelSystem extends BaseSystem {
   private levelTiles: Map<string, Phaser.GameObjects.Sprite> = new Map();
+  private tileGrid: (Phaser.GameObjects.Sprite | null)[][] = []; // Optimized 2D array for O(1) lookups
   private goldSprites!: Phaser.Physics.Arcade.StaticGroup;
   private exitLadderSprites: Phaser.GameObjects.Sprite[] = [];
   private exitMarker: Phaser.GameObjects.Text | null = null;
@@ -31,7 +33,21 @@ export class LevelSystem extends BaseSystem {
     // Initialize collision groups
     this.goldSprites = this.scene.physics.add.staticGroup();
     
+    // Initialize tile grid with proper dimensions
+    this.initializeTileGrid();
+    
     this.logger.debug('LevelSystem initialized');
+  }
+  
+  private initializeTileGrid(): void {
+    // Initialize 2D array for O(1) tile lookups
+    this.tileGrid = [];
+    for (let y = 0; y < GAME_CONFIG.levelHeight; y++) {
+      this.tileGrid[y] = [];
+      for (let x = 0; x < GAME_CONFIG.levelWidth; x++) {
+        this.tileGrid[y][x] = null;
+      }
+    }
   }
   
   public update(_time: number, _delta: number): void {
@@ -47,6 +63,9 @@ export class LevelSystem extends BaseSystem {
       }
     });
     this.levelTiles.clear();
+    
+    // Clear tile grid
+    this.tileGrid = [];
     
     // Clean up gold sprites
     if (this.goldSprites && this.goldSprites.children) {
@@ -145,11 +164,17 @@ export class LevelSystem extends BaseSystem {
   
   /**
    * Get tile type at grid position
-   * Extracted from GameScene.getTileType()
+   * Optimized with O(1) 2D array lookup instead of Map string key lookup
    */
   public getTileType(gridX: number, gridY: number): number {
-    const tileKey = `${gridX},${gridY}`;
-    const tile = this.levelTiles.get(tileKey);
+    // Bounds check
+    if (gridX < 0 || gridX >= GAME_CONFIG.levelWidth || 
+        gridY < 0 || gridY >= GAME_CONFIG.levelHeight) {
+      return TILE_TYPES.EMPTY;
+    }
+    
+    // O(1) lookup from 2D array
+    const tile = this.tileGrid[gridY][gridX];
     
     if (!tile) {
       return TILE_TYPES.EMPTY;
@@ -242,8 +267,12 @@ export class LevelSystem extends BaseSystem {
       // Store reference to the created sprites
       this.exitLadderSprites.push(ladder);
       
-      // Store in level tiles for consistency
+      // Store in level tiles for consistency (both Map and 2D array)
       this.levelTiles.set(tileKey, ladder);
+      if (gridY >= 0 && gridY < GAME_CONFIG.levelHeight && 
+          gridX >= 0 && gridX < GAME_CONFIG.levelWidth) {
+        this.tileGrid[gridY][gridX] = ladder; // O(1) storage
+      }
       
       // Fade in animation with staggered timing
       this.scene.tweens.add({
@@ -387,9 +416,12 @@ export class LevelSystem extends BaseSystem {
   
   /**
    * Create tilemap from level data
-   * Extracted from GameScene.createTilemap()
+   * Optimized with 2D array storage for O(1) lookups
    */
   private createTilemap(tiles: number[][]): void {
+    // Re-initialize tile grid for new level
+    this.initializeTileGrid();
+    
     tiles.forEach((row, y) => {
       row.forEach((tileType, x) => {
         if (tileType !== 0) { // Skip empty tiles
@@ -403,9 +435,10 @@ export class LevelSystem extends BaseSystem {
           tile.setData('gridX', x);
           tile.setData('gridY', y);
           
-          // Store tile reference
+          // Store tile reference in both Map (for compatibility) and 2D array (for performance)
           const tileKey = `${x},${y}`;
           this.levelTiles.set(tileKey, tile);
+          this.tileGrid[y][x] = tile; // O(1) storage
           
           // Add collision bodies based on tile type - delegate to CollisionSystem
           this.gameScene.getCollisionSystem().addTileCollision(tile, tileType);
@@ -514,5 +547,16 @@ export class LevelSystem extends BaseSystem {
     
     this.logger.debug(`Highest accessible position above exit ladder at (${ladderX}, ${ladderY}): (${ladderX}, ${highestY})`);
     return highestY;
+  }
+  
+  /**
+   * Update tile in the optimized 2D grid
+   * Used by HoleSystem when restoring tiles after hole fills
+   */
+  public setTileInGrid(gridX: number, gridY: number, tile: Phaser.GameObjects.Sprite | null): void {
+    if (gridX >= 0 && gridX < GAME_CONFIG.levelWidth && 
+        gridY >= 0 && gridY < GAME_CONFIG.levelHeight) {
+      this.tileGrid[gridY][gridX] = tile;
+    }
   }
 }
