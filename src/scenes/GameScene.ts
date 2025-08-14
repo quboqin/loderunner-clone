@@ -511,7 +511,7 @@ export class GameScene extends Scene {
       const tileData = tile.getData('tileType');
       
       // Special handling for ladders - only collide from above (platform behavior)
-      if (tileData === 3) { // Ladder tile
+      if (tileData === TILE_TYPES.LADDER) { // Ladder tile
         // Allow collision only if player is falling/moving down onto ladder top
         // Block collision if player is moving up through ladder from below
         const playerBottom = playerBody.y + playerBody.height;
@@ -848,7 +848,7 @@ export class GameScene extends Scene {
       const tileKey = `${gridX},${gridY}`;
       
       // Set tile data so collision detection recognizes this as a ladder
-      ladder.setData('tileType', 3); // Type 3 = ladder
+      ladder.setData('tileType', TILE_TYPES.LADDER); // Ladder tile type
       ladder.setData('gridX', gridX);
       ladder.setData('gridY', gridY);
       
