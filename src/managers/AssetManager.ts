@@ -147,10 +147,6 @@ export class AssetManager {
     let playerStart = { x: 0, y: 0 };
     let exitLadder: {x: number, y: number} | null = null;
     const allSPositions: {x: number, y: number}[] = [];
-
-    // First pass: find the exit ladder position (topmost 'S' in the rightmost column that has 'S')
-    let exitLadderX = -1;
-    let exitLadderY = -1;
     
     // Find rightmost column with 'S' characters
     let rightmostSColumn = -1;
@@ -168,6 +164,9 @@ export class AssetManager {
       }
     }
     
+    // First pass: find the exit ladder position (topmost 'S' in the rightmost column that has 'S')
+    let exitLadderX = -1;
+    let exitLadderY = -1;
     // Find topmost 'S' in that column to be the exit ladder
     if (rightmostSColumn !== -1) {
       for (let y = 0; y < levelArray.length; y++) {
@@ -185,33 +184,29 @@ export class AssetManager {
       for (let x = 0; x < line.length; x++) {
         const char = line[x];
         
-        // Check if this 'S' should be the exit ladder
-        if (char === 'S') {
-          // Collect all S positions
-          allSPositions.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize });
-          
-          row.push(TILE_TYPES.EMPTY); // ALL S characters hidden initially
-        } else {
-          switch (char) {
-            case ' ': row.push(TILE_TYPES.EMPTY); break; // Empty
-            case '#': row.push(TILE_TYPES.BRICK); break; // Brick
-            case 'H': row.push(TILE_TYPES.LADDER); break; // Ladder
-            case '-': row.push(TILE_TYPES.ROPE); break; // Rope
-            case '$': 
-              row.push(TILE_TYPES.EMPTY); // Empty space with gold
-              gold.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
-              break;
-            case '&': 
-              row.push(TILE_TYPES.EMPTY); // Empty space with player
-              playerStart = { x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }; // Convert to pixel coordinates
-              break;
-            case '0': 
-              row.push(TILE_TYPES.EMPTY); // Empty space with guard
-              guards.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
-              break;
-            case '@': row.push(TILE_TYPES.SOLID); break; // Solid block (cannot be dug)
-            default: row.push(TILE_TYPES.EMPTY); // Default to empty
-          }
+        switch (char) {
+          case ' ': row.push(TILE_TYPES.EMPTY); break; // Empty
+          case '#': row.push(TILE_TYPES.BRICK); break; // Brick
+          case 'H': row.push(TILE_TYPES.LADDER); break; // Ladder
+          case '-': row.push(TILE_TYPES.ROPE); break; // Rope
+          case 'S': // Exit ladder (hidden initially)
+            allSPositions.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize });
+            row.push(TILE_TYPES.EMPTY); // ALL S characters hidden initially
+            break;
+          case '$': 
+            row.push(TILE_TYPES.EMPTY); // Empty space with gold
+            gold.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
+            break;
+          case '&': 
+            row.push(TILE_TYPES.EMPTY); // Empty space with player
+            playerStart = { x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }; // Convert to pixel coordinates
+            break;
+          case '0': 
+            row.push(TILE_TYPES.EMPTY); // Empty space with guard
+            guards.push({ x: x * GAME_CONFIG.tileSize, y: y * GAME_CONFIG.tileSize }); // Convert to pixel coordinates
+            break;
+          case '@': row.push(TILE_TYPES.SOLID); break; // Solid block (cannot be dug)
+          default: row.push(TILE_TYPES.EMPTY); // Default to empty
         }
       }
       tiles.push(row);

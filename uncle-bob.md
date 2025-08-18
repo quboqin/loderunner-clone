@@ -489,6 +489,11 @@ Tile type 2 is defined but never used:
 
   Sort out the creation process of sprites and tiles, and identify points that can be optimized.
 
+  use CameraManager to replace scale: 1.6
+
+  Should the parameters at all places where height and low - level calculations are done and collisions are detected also be adjusted?
+![alt text](<screenshots/Screenshot 2025-08-14 at 10.24.52 PM.png>)
+
 51. AI Issues
 1. Issue 1: The height of the Guard is too high to pass through![alt text](<screenshots/Screenshot 2025-08-13 at 7.37.36 PM.png>)
 
@@ -499,3 +504,10 @@ Tile type 2 is defined but never used:
 
 4. The Guard's foot is in the Tile of the next lower layer.
 
+
+## Phase II, Optimization
+1. Sort out the initialization process of the level, including the creation of Tiles, various Sprites, the setting of key parameters, and output it as Markdown content to be added to architecture.md.
+
+2. Collect Element Size, included tile, player, guard, etc, and their body properties 
+  2.1 In Phaser, if the Physics is a Static body, does the size of the Physics Body equal the Original Sprite Size?
+  2.2 Why doesn't the Physics Body of the Guard equal that of the Player? Is there any particular consideration?
